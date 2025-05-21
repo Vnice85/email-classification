@@ -16,6 +16,11 @@ namespace EmailClassification.API
             // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
             builder.Services.AddEndpointsApiExplorer();
             builder.Services.AddSwaggerGen();
+            builder.Services.AddRouting(options =>
+            {
+                options.LowercaseUrls = true;
+            });
+            builder.Services.AddHttpContextAccessor();
             builder.Services.AddInfrastructure(builder.Configuration);
             builder.Services.AddApplication(builder.Configuration);
             var app = builder.Build();

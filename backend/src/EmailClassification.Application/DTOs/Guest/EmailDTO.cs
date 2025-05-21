@@ -7,15 +7,15 @@ using System.Threading.Tasks;
 
 namespace EmailClassification.Application.DTOs.Guest
 {
-    public class EmailClassifiedDTO
+    public class EmailDTO
     {
-        public string GuestId { get; set; } = null!;
         public string EmailId { get; set; } = null!;
+
         public string? SaveDate { get; set; }   
 
         public string? Subject { get; set; }
 
-        public string? Body { get; set; }
+        public string? Snippet { get; set; }
 
         public string? LabelName { get; set; }
     }

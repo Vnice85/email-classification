@@ -1,12 +1,11 @@
-﻿using EmailClassification.Infrastructure.Persistence;
+﻿using EmailClassification.Application.Interfaces;
+using EmailClassification.Application.Interfaces.IServices;
+using EmailClassification.Infrastructure.Implement;
+using EmailClassification.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+
 
 namespace EmailClassification.Infrastructure
 {
@@ -16,6 +15,8 @@ namespace EmailClassification.Infrastructure
         {
             services.AddDbContext<EmaildbContext>(options =>
             options.UseNpgsql(configuration.GetConnectionString("DefaultConnection")));
+            services.AddScoped<IClassificationService, ClassificationService>();
+            services.AddScoped<IUnitOfWork, UnitOfWork>();
             return services;
         }
     }

@@ -1,4 +1,6 @@
-﻿using Microsoft.Extensions.Configuration;
+﻿using EmailClassification.Application.Interfaces.IServices;
+using EmailClassification.Application.Services;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using System;
 using System.Collections.Generic;
@@ -12,7 +14,7 @@ namespace EmailClassification.Application
     {
         public static IServiceCollection AddApplication(this IServiceCollection services, IConfiguration configuration)
         {
-            // Add application services here
+            services.AddScoped<IGuestService, GuestService>();
             return services;
         }
     }
