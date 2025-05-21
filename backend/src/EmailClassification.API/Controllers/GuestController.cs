@@ -1,5 +1,6 @@
 ﻿using EmailClassification.Application.DTOs.Guest;
 using EmailClassification.Application.Interfaces.IServices;
+using EmailClassification.Infrastructure.Attributes;
 using Microsoft.AspNetCore.Mvc;
 
 namespace EmailClassification.API.Controllers
@@ -13,7 +14,6 @@ namespace EmailClassification.API.Controllers
             _guestService = guestService;
         }
 
-
         [HttpGet("GuestId")]
         public async Task<IActionResult> GenerateGuestId()
         {
@@ -21,6 +21,7 @@ namespace EmailClassification.API.Controllers
             return Ok(new { guestId });
         }
 
+        [RequireGuestId]
         [HttpGet("Messages")]
         public async Task<IActionResult> GetGuestEmails([FromQuery] GuestFilter filter)
         {
@@ -28,6 +29,8 @@ namespace EmailClassification.API.Controllers
             return Ok(ls);
         }
 
+
+        [RequireGuestId]
         [HttpGet("Messages/{id}")]
         public async Task<IActionResult> GetGuestEmailById(string id)
         {
@@ -40,6 +43,7 @@ namespace EmailClassification.API.Controllers
             return Ok(guestEmail);
         }
 
+        [RequireGuestId]
         [HttpPost("Messages")]
         public async Task<IActionResult> SaveGuestEmail([FromBody] GuestEmailDTO guestEmail)
         {
@@ -54,6 +58,7 @@ namespace EmailClassification.API.Controllers
             }
         }
 
+        [RequireGuestId]
         [HttpPut("Messages/{id}")]
         public async Task<IActionResult> EditGuestEmail(string id, [FromBody] GuestEmailDTO guestEmail)
         {
@@ -63,6 +68,8 @@ namespace EmailClassification.API.Controllers
             return Ok(result);
         }
 
+
+        [RequireGuestId]
         [HttpDelete("Messages/{id}")]
         public async Task<IActionResult> Delete(string id)
         {

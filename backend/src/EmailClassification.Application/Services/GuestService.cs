@@ -13,21 +13,16 @@ namespace EmailClassification.Application.Services
     {
         private readonly IClassificationService _classificationService;
         private readonly IUnitOfWork _unitOfWork;
-        private readonly IHttpContextAccessor _httpContextAccessor;
+        private readonly IGuestContext _context;
+        private string? guestId => _context.GuestId;
+
         public GuestService(IClassificationService classificationService,
                             IUnitOfWork unitOfWork,
-                            IHttpContextAccessor httpContextAccessor)
+                            IGuestContext context)
         {
             _classificationService = classificationService;
-            _httpContextAccessor = httpContextAccessor;
+            _context = context;
             _unitOfWork = unitOfWork;
-
-        }
-        
-        public string GetGuestIdAsync()
-        {
-            var guestId = _httpContextAccessor.HttpContext.Request.Headers["GuestId"].ToString();
-            return guestId;
         }
 
         public async Task<string> GenerateGuestIdAsync()
@@ -48,7 +43,6 @@ namespace EmailClassification.Application.Services
 
         public async Task<EmailDTO> AddGuestEmailAsync(GuestEmailDTO email)
         {
-            string guestId = GetGuestIdAsync();
             if (guestId == null)
                 throw new Exception("Required guest id in header");
             if (email.Body == string.Empty)
@@ -99,7 +93,6 @@ namespace EmailClassification.Application.Services
 
         public async Task<bool> DeleteGuestEmailAsync(string emailId)
         {
-            string guestId = GetGuestIdAsync();
             var deleteItem = await _unitOfWork.Email.GetItemWhere(d => d.UserId == guestId && d.EmailId == emailId);
             if (deleteItem == null)
                 return false;
@@ -109,7 +102,6 @@ namespace EmailClassification.Application.Services
 
         public async Task<EmailDTO?> EditGuestEmailById(string id, GuestEmailDTO email)
         {
-            string guestId = GetGuestIdAsync();
             if (email.Body == string.Empty)
                 email.Body = " ";
             var label = await _classificationService.IdentifyLabel(email.Body!);
@@ -155,7 +147,6 @@ namespace EmailClassification.Application.Services
 
         public async Task<EmailDetailDTO?> GetGuestEmailByIdAsync(string id)
         {
-            string guestId = GetGuestIdAsync();
             var item = await _unitOfWork.Email.AsQueryable(i => i.UserId == guestId && i.EmailId == id)
                                                 .Include(i => i.Label).FirstOrDefaultAsync();
             if (item == null)
@@ -172,7 +163,6 @@ namespace EmailClassification.Application.Services
 
         public async Task<List<EmailDTO>> GetGuestEmailsAsync(GuestFilter filter)
         {
-            string guestId = GetGuestIdAsync();
             var label = await _unitOfWork.EmailLabel.GetItemWhere(l => l.LabelName == filter.LabelName);
             var query = _unitOfWork.Email.AsQueryable(ls => ls.UserId == guestId && ls.DirectionId == (int)DirectionStatus.DRAFT);
 

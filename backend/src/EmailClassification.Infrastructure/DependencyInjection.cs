@@ -17,6 +17,7 @@ namespace EmailClassification.Infrastructure
             options.UseNpgsql(configuration.GetConnectionString("DefaultConnection")));
             services.AddScoped<IClassificationService, ClassificationService>();
             services.AddScoped<IUnitOfWork, UnitOfWork>();
+            services.AddScoped<IGuestContext, GuestContext>();
             return services;
         }
     }

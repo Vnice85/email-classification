@@ -1,6 +1,7 @@
 
 using EmailClassification.Application;
 using EmailClassification.Infrastructure;
+using EmailClassification.Infrastructure.Middlewares;
 
 namespace EmailClassification.API
 {
@@ -33,7 +34,7 @@ namespace EmailClassification.API
             }
 
             app.UseHttpsRedirection();
-
+            app.UseMiddleware<GuestIdMiddleware>();
             app.UseAuthorization();
 
 
