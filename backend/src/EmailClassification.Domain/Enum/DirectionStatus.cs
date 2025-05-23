@@ -11,6 +11,5 @@ namespace EmailClassification.Domain.Enum
         INBOX = 1,
         SENT = 2,
         DRAFT = 3,
-        TRASH = 4,
     }
 }

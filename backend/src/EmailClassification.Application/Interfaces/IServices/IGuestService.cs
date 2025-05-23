@@ -12,10 +12,11 @@ namespace EmailClassification.Application.Interfaces.IServices
     {
         Task<string> GenerateGuestIdAsync();
         Task<EmailDetailDTO?> GetGuestEmailByIdAsync(string id);
-        Task<List<EmailDTO>> GetGuestEmailsAsync(GuestFilter filter);
-        Task<EmailDTO> AddGuestEmailAsync(GuestEmailDTO email);
-        Task<EmailDTO?> EditGuestEmailById(string id, GuestEmailDTO email);
+        Task<List<GuestEmailHeaderDTO>> GetGuestEmailsAsync(GuestFilter filter);
+        Task<GuestEmailHeaderDTO> CreateGuestEmailAsync(CreateGuestEmailDTO email);
+        Task<GuestEmailHeaderDTO?> EditGuestEmailById(string id, CreateGuestEmailDTO email);
         Task<bool> DeleteGuestEmailAsync(string emailId);
+        Task<List<GuestEmailHeaderDTO>> SearchGuestEmailAsync(ElasticFilter filter);
 
     }
 }

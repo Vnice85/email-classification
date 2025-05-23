@@ -1,4 +1,6 @@
-﻿using EmailClassification.Application.DTOs.Guest;
+﻿using EmailClassification.Application.DTOs;
+using EmailClassification.Application.DTOs.Guest;
+using EmailClassification.Application.Helpers;
 using EmailClassification.Application.Interfaces;
 using EmailClassification.Application.Interfaces.IServices;
 using EmailClassification.Domain.Enum;
@@ -6,6 +8,7 @@ using EmailClassification.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Http;
 using Microsoft.EntityFrameworkCore;
 using NetTopologySuite.Index.HPRtree;
+using System.Runtime.InteropServices;
 
 namespace EmailClassification.Application.Services
 {
@@ -14,15 +17,18 @@ namespace EmailClassification.Application.Services
         private readonly IClassificationService _classificationService;
         private readonly IUnitOfWork _unitOfWork;
         private readonly IGuestContext _context;
+        private readonly IEmailSearchService _emailSearchService;
         private string? guestId => _context.GuestId;
 
         public GuestService(IClassificationService classificationService,
                             IUnitOfWork unitOfWork,
-                            IGuestContext context)
+                            IGuestContext context,
+                            IEmailSearchService emailSearchService)
         {
             _classificationService = classificationService;
             _context = context;
             _unitOfWork = unitOfWork;
+            _emailSearchService = emailSearchService;
         }
 
         public async Task<string> GenerateGuestIdAsync()
@@ -41,7 +47,7 @@ namespace EmailClassification.Application.Services
             return guest.UserId;
         }
 
-        public async Task<EmailDTO> AddGuestEmailAsync(GuestEmailDTO email)
+        public async Task<GuestEmailHeaderDTO> CreateGuestEmailAsync(CreateGuestEmailDTO email)
         {
             if (guestId == null)
                 throw new Exception("Required guest id in header");
@@ -61,7 +67,7 @@ namespace EmailClassification.Application.Services
                     await _unitOfWork.EmailLabel.AddAsync(labelItem);
                     await _unitOfWork.SaveAsync();
                 }
-                var sendItem = new Email
+                var saveItem = new Email
                 {
                     UserId = guestId,
                     EmailId = Guid.NewGuid().ToString(),
@@ -72,15 +78,33 @@ namespace EmailClassification.Application.Services
                     DirectionId = (int)DirectionStatus.DRAFT,
                     LabelId = labelItem.LabelId
                 };
-                await _unitOfWork.Email.AddAsync(sendItem);
+                await _unitOfWork.Email.AddAsync(saveItem);
                 await _unitOfWork.SaveAsync();
+                //await _unitOfWork.BulkInsertAsync(new List<Email> { sendItem });
                 await _unitOfWork.CommitTransactionAsync();
-                return new EmailDTO
+
+                // Fix tracking problem
+                var doc = new Email
                 {
-                    EmailId = sendItem.EmailId,
-                    SaveDate = sendItem.SentDate?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss"),
-                    Subject = sendItem.Subject,
-                    Snippet = sendItem.Snippet,
+                    EmailId = saveItem.EmailId,
+                    UserId = guestId,
+                    SentDate = saveItem.SentDate,
+                    Subject = saveItem.Subject,
+                    Body = saveItem.Body,
+                    PlainText = saveItem.Body,
+                    Snippet = saveItem.Snippet,
+                    DirectionId = (int)DirectionStatus.DRAFT,
+                    LabelId = labelItem.LabelId
+                };
+            
+                await _emailSearchService.SingleIndexAsync(doc);
+                Console.WriteLine("Indexing email: " + saveItem.EmailId);
+                return new GuestEmailHeaderDTO
+                {
+                    EmailId = saveItem.EmailId,
+                    SaveDate = DateTimeHelper.FormatToVietnamTime(saveItem.SentDate),
+                    Subject = saveItem.Subject,
+                    Snippet = saveItem.Snippet,
                     LabelName = labelItem.LabelName
                 };
             }
@@ -100,7 +124,7 @@ namespace EmailClassification.Application.Services
             return await _unitOfWork.SaveAsync();
         }
 
-        public async Task<EmailDTO?> EditGuestEmailById(string id, GuestEmailDTO email)
+        public async Task<GuestEmailHeaderDTO?> EditGuestEmailById(string id, CreateGuestEmailDTO email)
         {
             if (email.Body == string.Empty)
                 email.Body = " ";
@@ -129,10 +153,23 @@ namespace EmailClassification.Application.Services
                 _unitOfWork.Email.Update(item);
                 await _unitOfWork.SaveAsync();
                 await _unitOfWork.CommitTransactionAsync();
-                return new EmailDTO
+                var doc = new Email
                 {
                     EmailId = item.EmailId,
-                    SaveDate = item.SentDate?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss"),
+                    UserId = guestId,
+                    SentDate = item.SentDate,
+                    Subject = item.Subject,
+                    Body = item.Body,
+                    PlainText = item.Body,
+                    Snippet = item.Snippet,
+                    DirectionId = (int)DirectionStatus.DRAFT,
+                    LabelId = labelItem.LabelId
+                };
+                await _emailSearchService.SingleIndexAsync(doc);
+                return new GuestEmailHeaderDTO
+                {
+                    EmailId = item.EmailId,
+                    SaveDate = DateTimeHelper.FormatToVietnamTime(item.SentDate),
                     Subject = item.Subject,
                     Snippet = item.Snippet,
                     LabelName = labelItem.LabelName
@@ -154,14 +191,14 @@ namespace EmailClassification.Application.Services
             return new EmailDetailDTO
             {
                 EmailId = item.EmailId,
-                SaveDate = item.SentDate?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss"),
+                SaveDate = DateTimeHelper.FormatToVietnamTime(item.SentDate),
                 Subject = item.Subject,
                 Body = item.Body,
                 LabelName = item.Label!.LabelName
             };
         }
 
-        public async Task<List<EmailDTO>> GetGuestEmailsAsync(GuestFilter filter)
+        public async Task<List<GuestEmailHeaderDTO>> GetGuestEmailsAsync(GuestFilter filter)
         {
             var label = await _unitOfWork.EmailLabel.GetItemWhere(l => l.LabelName == filter.LabelName);
             var query = _unitOfWork.Email.AsQueryable(ls => ls.UserId == guestId && ls.DirectionId == (int)DirectionStatus.DRAFT);
@@ -176,17 +213,36 @@ namespace EmailClassification.Application.Services
                 .Take(filter.PageSize)
                 .Include(ls => ls.Label)
                 .ToListAsync();
-            var guestEmails = emails.Select(email => new EmailDTO
+            var guestEmails = emails.Select(email => new GuestEmailHeaderDTO
             {
                 EmailId = email.EmailId,
                 Subject = email.Subject,
                 Snippet = email.Snippet,
                 LabelName = email.Label!.LabelName,
-                SaveDate = email.SentDate?.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss"),
+                SaveDate = DateTimeHelper.FormatToVietnamTime(email.SentDate),
             }).OrderByDescending(d => d.SaveDate).ToList();
 
             return guestEmails;
         }
 
+        public async Task<List<GuestEmailHeaderDTO>> SearchGuestEmailAsync(ElasticFilter filter)
+        {
+            var ls = await _emailSearchService.SearchAsync(guestId!, filter);
+            var labelName = _unitOfWork.EmailLabel.AsQueryable().ToList();
+            var labelNameDict = new Dictionary<int, string>();
+            foreach(var item in labelName)
+            {
+                labelNameDict.Add(item.LabelId, item.LabelName!);
+            }
+            var guestEmails = ls.Select(email => new GuestEmailHeaderDTO
+            {
+                EmailId = email.EmailId,
+                Subject = email.Subject,
+                Snippet = email.Snippet,
+                SaveDate = email.SentDate,
+                LabelName = email.LabelId != 0 ? labelNameDict[email.LabelId] : "UNDEFINE" 
+            }).OrderByDescending(d => d.SaveDate).ToList();
+            return guestEmails;
+        }
     }
 }

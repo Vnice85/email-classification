@@ -3,6 +3,7 @@ using EmailClassification.Application.Interfaces.IRepository;
 using EmailClassification.Infrastructure.Persistence.Repositories;
 using Microsoft.EntityFrameworkCore.Storage;
 using EFCore.BulkExtensions;
+using Microsoft.EntityFrameworkCore;
 
 namespace EmailClassification.Infrastructure.Persistence
 {
@@ -80,5 +81,7 @@ namespace EmailClassification.Infrastructure.Persistence
         {
            await _context.BulkReadAsync(entities, config);
         }
+
+       
     }
 }

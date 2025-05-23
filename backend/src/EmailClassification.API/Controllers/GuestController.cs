@@ -1,13 +1,16 @@
-﻿using EmailClassification.Application.DTOs.Guest;
+﻿using EmailClassification.Application.DTOs;
+using EmailClassification.Application.DTOs.Guest;
 using EmailClassification.Application.Interfaces.IServices;
 using EmailClassification.Infrastructure.Attributes;
+using EmailClassification.Infrastructure.Implement;
 using Microsoft.AspNetCore.Mvc;
+using System.Security.Claims;
 
 namespace EmailClassification.API.Controllers
 {
     public class GuestController : BaseController
     {
-        private IGuestService _guestService;
+        private readonly IGuestService _guestService;
 
         public GuestController(IGuestService guestService)
         {
@@ -29,27 +32,35 @@ namespace EmailClassification.API.Controllers
             return Ok(ls);
         }
 
-
         [RequireGuestId]
         [HttpGet("Messages/{id}")]
         public async Task<IActionResult> GetGuestEmailById(string id)
         {
-
             var guestEmail = await _guestService.GetGuestEmailByIdAsync(id);
             if (guestEmail == null)
             {
                 return NotFound();
             }
+
             return Ok(guestEmail);
         }
 
         [RequireGuestId]
+        [HttpGet("Messages/Search")]
+        public async Task<IActionResult> SearchGuestEmail([FromQuery] ElasticFilter filter)
+        {
+            var ls = await _guestService.SearchGuestEmailAsync(filter);
+            return Ok(ls);
+        }
+
+
+        [RequireGuestId]
         [HttpPost("Messages")]
-        public async Task<IActionResult> SaveGuestEmail([FromBody] GuestEmailDTO guestEmail)
+        public async Task<IActionResult> CreateGuestEmail([FromBody] CreateGuestEmailDTO guestEmail)
         {
             try
             {
-                var model = await _guestService.AddGuestEmailAsync(guestEmail);
+                var model = await _guestService.CreateGuestEmailAsync(guestEmail);
                 return CreatedAtAction(nameof(GetGuestEmailById), new { id = model.EmailId }, model);
             }
             catch
@@ -60,7 +71,7 @@ namespace EmailClassification.API.Controllers
 
         [RequireGuestId]
         [HttpPut("Messages/{id}")]
-        public async Task<IActionResult> EditGuestEmail(string id, [FromBody] GuestEmailDTO guestEmail)
+        public async Task<IActionResult> EditGuestEmail(string id, [FromBody] CreateGuestEmailDTO guestEmail)
         {
             var result = await _guestService.EditGuestEmailById(id, guestEmail);
             if (result == null)
@@ -78,7 +89,5 @@ namespace EmailClassification.API.Controllers
                 return NotFound();
             return StatusCode(204);
         }
-
     }
 }
-

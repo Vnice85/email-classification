@@ -5,6 +5,7 @@ using EmailClassification.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Nest;
 
 
 namespace EmailClassification.Infrastructure
@@ -18,6 +19,22 @@ namespace EmailClassification.Infrastructure
             services.AddScoped<IClassificationService, ClassificationService>();
             services.AddScoped<IUnitOfWork, UnitOfWork>();
             services.AddScoped<IGuestContext, GuestContext>();
+            services.AddScoped<IEmailSearchService, EmailSearchService>();
+
+
+            // register for elasticsearch
+            services.AddSingleton<IElasticClient>(sp =>
+            {
+                var Url = configuration["Elastic:Url"]!;
+                var Index = configuration["Elastic:Index"];
+                //var Username = configuration["Elastic:Username"];
+                //var Password = configuration["Elastic:Password"];
+                var settings = new ConnectionSettings(new Uri(Url))
+                .DefaultIndex(Index)
+                /*.BasicAuthentication(Username, Password)*/;
+                var client = new ElasticClient(settings);
+                return client;
+            });
             return services;
         }
     }

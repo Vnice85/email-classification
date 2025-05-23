@@ -1,5 +1,6 @@
 ﻿using EFCore.BulkExtensions;
 using EmailClassification.Application.Interfaces.IRepository;
+using Microsoft.EntityFrameworkCore;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -24,6 +25,8 @@ namespace EmailClassification.Application.Interfaces
         Task BeginTransactionASync();
         Task CommitTransactionAsync();
         Task RollbackTransactionAsync();
+
+      
 
     }
 }

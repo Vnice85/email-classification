@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 
 namespace EmailClassification.Application.DTOs.Guest
 {
-    public class EmailDTO
+    public class GuestEmailHeaderDTO
     {
         public string EmailId { get; set; } = null!;
 

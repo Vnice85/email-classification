@@ -33,8 +33,7 @@ public partial class EmaildbContext : DbContext
         modelBuilder.Entity<EmailDirection>().HasData(
           new EmailDirection { DirectionId = (int)DirectionStatus.INBOX, DirectionName = DirectionStatus.INBOX.ToString() },
           new EmailDirection { DirectionId = (int)DirectionStatus.SENT, DirectionName = DirectionStatus.SENT.ToString() },
-          new EmailDirection { DirectionId = (int)DirectionStatus.DRAFT, DirectionName = DirectionStatus.DRAFT.ToString() },
-          new EmailDirection { DirectionId = (int)DirectionStatus.TRASH, DirectionName = DirectionStatus.TRASH.ToString() }
+          new EmailDirection { DirectionId = (int)DirectionStatus.DRAFT, DirectionName = DirectionStatus.DRAFT.ToString() }
         );
 
         modelBuilder.Entity<AppUser>(entity =>

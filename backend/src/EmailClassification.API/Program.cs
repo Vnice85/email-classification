@@ -1,5 +1,6 @@
 
 using EmailClassification.Application;
+using EmailClassification.Application.Interfaces.IServices;
 using EmailClassification.Infrastructure;
 using EmailClassification.Infrastructure.Middlewares;
 
@@ -7,7 +8,7 @@ namespace EmailClassification.API
 {
     public class Program
     {
-        public static void Main(string[] args)
+        public static async Task Main(string[] args)
         {
             var builder = WebApplication.CreateBuilder(args);
 
@@ -32,15 +33,18 @@ namespace EmailClassification.API
                 app.UseSwagger();
                 app.UseSwaggerUI();
             }
-
+            using (var scope = app.Services.CreateScope())
+            {
+                var elasticSearchService = scope.ServiceProvider.GetRequiredService<IEmailSearchService>();
+                await elasticSearchService.CreateIndexAsync();
+            }
             app.UseHttpsRedirection();
             app.UseMiddleware<GuestIdMiddleware>();
             app.UseAuthorization();
 
 
             app.MapControllers();
-
-            app.Run();
+            await app.RunAsync();
         }
     }
 }
