@@ -1,9 +1,10 @@
-
+﻿
 using EmailClassification.Application;
 using EmailClassification.Application.Interfaces.IServices;
 using EmailClassification.Infrastructure;
 using EmailClassification.Infrastructure.Middlewares;
 using Hangfire;
+using Microsoft.OpenApi.Models;
 
 namespace EmailClassification.API
 {
@@ -18,7 +19,6 @@ namespace EmailClassification.API
             builder.Services.AddControllers();
             // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
             builder.Services.AddEndpointsApiExplorer();
-            builder.Services.AddSwaggerGen();
             builder.Services.AddRouting(options =>
             {
                 options.LowercaseUrls = true;
@@ -26,6 +26,40 @@ namespace EmailClassification.API
             builder.Services.AddHttpContextAccessor();
             builder.Services.AddInfrastructure(builder.Configuration);
             builder.Services.AddApplication(builder.Configuration);
+            builder.Services.AddSwaggerGen(options =>
+            {
+                options.AddServer(new OpenApiServer
+                {
+                    Url = "https://localhost:44366",
+                    Description = "Local Dev"
+                });
+                options.SwaggerDoc("v1", new OpenApiInfo { Title = "EmailClassification API", Version = "v1" });
+                var securityScheme = new OpenApiSecurityScheme
+                {
+                    Name = "Authorization",
+                    Type = SecuritySchemeType.Http,
+                    Scheme = "bearer",
+                    BearerFormat = "JWT",
+                    In = ParameterLocation.Header,
+                    Description = "Nhập JWT token (không cần prefix Bearer)",
+                    Reference = new OpenApiReference
+                    {
+                        Type = ReferenceType.SecurityScheme,
+                        Id = "Bearer"
+                    }
+                };
+                options.AddSecurityDefinition("Bearer", securityScheme);
+                options.AddSecurityRequirement(new OpenApiSecurityRequirement
+                {
+                        {
+                            securityScheme,
+                            Array.Empty<string>()
+                        }
+                });
+            });
+
+
+
             var app = builder.Build();
 
             // Configure the HTTP request pipeline.
@@ -39,8 +73,11 @@ namespace EmailClassification.API
                 var elasticSearchService = scope.ServiceProvider.GetRequiredService<IEmailSearchService>();
                 await elasticSearchService.CreateIndexAsync();
             }
+
+            app.UseCors("AllowAll");
             app.UseHttpsRedirection();
             app.UseMiddleware<GuestIdMiddleware>();
+            app.UseAuthentication();
             app.UseAuthorization();
             app.UseHangfireDashboard();
 
