@@ -38,10 +38,9 @@ namespace EmailClassification.Application.Services
             {
                 UserId = id,
                 UserName = id.Substring(0, 10),
+                CreatedAt = DateTime.UtcNow,
+                IsTemp = true
             };
-            {
-            }
-            ;
             await _unitOfWork.AppUser.AddAsync(guest);
             await _unitOfWork.SaveAsync();
             return guest.UserId;
@@ -120,7 +119,7 @@ namespace EmailClassification.Application.Services
             var deleteItem = await _unitOfWork.Email.GetItemWhere(d => d.UserId == guestId && d.EmailId == emailId);
             if (deleteItem == null)
                 return false;
-            _unitOfWork.Email.Delete(deleteItem);
+            _unitOfWork.Email.Remove(deleteItem);
             return await _unitOfWork.SaveAsync();
         }
 

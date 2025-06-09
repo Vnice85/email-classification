@@ -1,7 +1,9 @@
 CREATE TABLE app_user (
     user_id VARCHAR(255) PRIMARY KEY,
     user_name VARCHAR(100),
-    profile_image VARCHAR(255)
+    profile_image VARCHAR(255),
+    created_at TIMESTAMPTZ
+    is_temp BIT
 );
 
 CREATE TABLE email_direction (

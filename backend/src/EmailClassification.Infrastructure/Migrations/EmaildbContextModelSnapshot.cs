@@ -3,20 +3,17 @@ using System;
 using EmailClassification.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
 #nullable disable
 
-namespace EmailClassification.Infrastructure.Persistence.Migrations
+namespace EmailClassification.Infrastructure.Migrations
 {
     [DbContext(typeof(EmaildbContext))]
-    [Migration("20250522045707_InitialMigration")]
-    partial class InitialMigration
+    partial class EmaildbContextModelSnapshot : ModelSnapshot
     {
-        /// <inheritdoc />
-        protected override void BuildTargetModel(ModelBuilder modelBuilder)
+        protected override void BuildModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -31,6 +28,14 @@ namespace EmailClassification.Infrastructure.Persistence.Migrations
                         .HasMaxLength(255)
                         .HasColumnType("character varying(255)")
                         .HasColumnName("user_id");
+
+                    b.Property<DateTime?>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<bool>("IsTemp")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_temp");
 
                     b.Property<string>("ProfileImage")
                         .HasMaxLength(255)

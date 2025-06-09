@@ -6,6 +6,7 @@ using EmailClassification.Application.Interfaces.IServices;
 using EmailClassification.Domain.Enum;
 using EmailClassification.Infrastructure.Persistence;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Nest;
 using System;
 using System.Collections.Generic;
@@ -19,10 +20,15 @@ namespace EmailClassification.Infrastructure.Implement
     {
         private readonly IElasticClient _client;
         private readonly string index;
-        public EmailSearchService(IElasticClient client, IConfiguration configuration)
+        private readonly ILogger<EmailSearchService> _logger;
+
+        public EmailSearchService(IElasticClient client, 
+                                  IConfiguration configuration,
+                                  ILogger<EmailSearchService> logger)
         {
             _client = client;
             this.index = configuration["Elastic:Index"]!;
+            _logger = logger;
         }
 
         public async Task SingleIndexAsync(Email email)
@@ -30,7 +36,8 @@ namespace EmailClassification.Infrastructure.Implement
             var indexResponse = await _client.IndexDocumentAsync(email);
             if (!indexResponse.IsValid)
             {
-                throw new Exception("Failed to index document: " + indexResponse.DebugInformation);
+                _logger.LogError("Failed to index document: " + indexResponse.DebugInformation);
+              throw new Exception("Failed to index document: " + indexResponse.DebugInformation);
             }
         }
 
@@ -65,7 +72,9 @@ namespace EmailClassification.Infrastructure.Implement
                 ));
             if (!createIndexResponse.IsValid)
             {
+                _logger.LogError("Failed to create index: " + createIndexResponse.DebugInformation);
                 throw new Exception("Failed to create index: " + createIndexResponse.DebugInformation);
+
             }
         }
 
@@ -78,7 +87,9 @@ namespace EmailClassification.Infrastructure.Implement
                     .Select(e => $"ID: {e.Id}, Error: {e.Error?.Reason}")
                     .ToList();
 
+                _logger.LogError("Bulk indexing failed:\n" + string.Join("\n", failedItems));
                 throw new Exception("Bulk indexing failed:\n" + string.Join("\n", failedItems));
+
             }
         }
 

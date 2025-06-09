@@ -16,6 +16,7 @@ namespace EmailClassification.Application.Interfaces.IRepository
         Task<T> AddAsync(T entity);
         Task<IEnumerable<T>> AddRangeAsync(IEnumerable<T> entities);
         T Update(T entity);
-        bool Delete(T entity);
+        bool Remove(T entity);
+        bool RemoveRange(IEnumerable<T> entities);
     }
 }

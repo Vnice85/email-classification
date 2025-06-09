@@ -59,11 +59,25 @@ namespace EmailClassification.Infrastructure.Persistence.Repositories
             return entities;
         }
 
-        public bool Delete(T entity)
+        public bool Remove(T entity)
         {
             try
             {
                 var result = _context.Set<T>().Remove(entity);
+                return true;
+            }
+            catch (System.Exception)
+            {
+                throw;
+            }
+        }
+
+
+        public bool RemoveRange(IEnumerable<T> entities)
+        {
+            try
+            {
+                _context.Set<T>().RemoveRange(entities);
                 return true;
             }
             catch (System.Exception)

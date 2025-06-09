@@ -3,6 +3,7 @@ using EmailClassification.Application;
 using EmailClassification.Application.Interfaces.IServices;
 using EmailClassification.Infrastructure;
 using EmailClassification.Infrastructure.Middlewares;
+using Hangfire;
 
 namespace EmailClassification.API
 {
@@ -41,6 +42,7 @@ namespace EmailClassification.API
             app.UseHttpsRedirection();
             app.UseMiddleware<GuestIdMiddleware>();
             app.UseAuthorization();
+            app.UseHangfireDashboard();
 
 
             app.MapControllers();
