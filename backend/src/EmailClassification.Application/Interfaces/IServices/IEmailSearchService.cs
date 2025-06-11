@@ -17,6 +17,6 @@ namespace EmailClassification.Application.Interfaces.IServices
         Task SingleIndexAsync(Email email);
         Task BulkIndexAsync(List<Email> docs);
         Task<bool> DeleteAsync(string id);
-        Task<List<EmailHeaderDTO>> SearchAsync(string userId, ElasticFilter filter);
+        Task<List<EmailSearchHeaderDTO>> SearchAsync(string userId, ElasticFilter filter);
     }
 }

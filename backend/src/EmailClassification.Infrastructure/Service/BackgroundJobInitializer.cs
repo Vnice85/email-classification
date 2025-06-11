@@ -13,7 +13,9 @@ namespace EmailClassification.Infrastructure.Service
     {
         public Task StartAsync(CancellationToken cancellationToken)
         {
-            RecurringJob.AddOrUpdate<IBackgroundService>("delete-guest", s => s.DeleteGuestAsync(), "*/1 * * * *");
+            RecurringJob.AddOrUpdate<IBackgroundService>("sync-emails", s => s.SyncAllUsersEmails(), "*/2 * * * *");
+            RecurringJob.AddOrUpdate<IBackgroundService>("classify-emails", s => s.ClassifyAllUsersEmails(), "*/2 * * * *");
+            RecurringJob.AddOrUpdate<IBackgroundService>("delete-guest", s => s.DeleteGuestAsync(), "* * */3 * *");
             return Task.CompletedTask;
 
         }

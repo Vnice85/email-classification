@@ -1,12 +1,15 @@
 ﻿using Elasticsearch.Net;
 using EmailClassification.Application.Interfaces;
 using EmailClassification.Application.Interfaces.Background;
+using EmailClassification.Application.Interfaces.IServices;
 using EmailClassification.Infrastructure.Persistence;
+using Hangfire;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -55,6 +58,41 @@ namespace EmailClassification.Infrastructure.Implement
                 _logger.LogError(ex, "Error when delete guest");
             }
 
+        }
+
+        public async Task SyncAllUsersEmails()
+        {
+            var userIds = await _unitOfWork.AppUser.AsQueryable(u=> u.IsTemp == false).Select(u => u.UserId).ToListAsync();
+            if (!userIds.Any())
+            {
+                return;
+            }
+            foreach (var id in userIds)
+            {
+                try
+                {
+                    BackgroundJob.Enqueue<IEmailService>(s => s.SyncEmailsFromGmail(id, "INBOX", false));
+                    BackgroundJob.Enqueue<IEmailService>(s => s.SyncEmailsFromGmail(id, "SENT", false));
+                }
+                catch(Exception ex)
+                {
+                    _logger.LogError(ex, "Error when enqueue sync emails for user {UserId}", id);
+                }
+
+            }
+        }
+        
+        public async Task ClassifyAllUsersEmails()
+        {
+            var userIds = await _unitOfWork.AppUser.AsQueryable().Select(u => u.UserId).ToListAsync();
+            if (!userIds.Any())
+            {
+                return;
+            }
+            foreach (var id in userIds)
+            {
+                BackgroundJob.Enqueue<IEmailService>(s => s.ClassifyAllEmails(id));
+            }
         }
 
     }

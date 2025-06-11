@@ -64,7 +64,7 @@ namespace EmailClassification.API.Controllers
                                     window.close();
                                 }})();
                             </script>
-                            <p>Loggin in...</p>
+                            <p>Logging in...</p>
                         </body>
                         </html>";
             return Content(html, "text/html");

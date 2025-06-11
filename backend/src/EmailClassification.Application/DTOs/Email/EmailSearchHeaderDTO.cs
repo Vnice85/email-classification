@@ -1,7 +1,12 @@
-﻿
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
+using System.Text;
+using System.Threading.Tasks;
+
 namespace EmailClassification.Application.DTOs.Email
 {
-    public class EmailHeaderDTO
+    public class EmailSearchHeaderDTO
     {
         public string EmailId { get; set; } = null!;
 
@@ -18,8 +23,5 @@ namespace EmailClassification.Application.DTOs.Email
         public string? Snippet { get; set; }
 
         public string? Subject { get; set; }
-
-        public string? LabelName{ get; set; }
-
     }
 }

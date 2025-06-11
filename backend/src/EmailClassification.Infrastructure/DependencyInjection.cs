@@ -30,6 +30,7 @@ namespace EmailClassification.Infrastructure
             services.AddScoped<IGuestContext, GuestContext>();
             services.AddScoped<IEmailSearchService, EmailSearchService>();
             services.AddScoped<IAuthService, AuthService>();
+            services.AddScoped<IEmailService, EmailService>();
             services.AddHttpClient();
             services.AddScoped<IBackgroundService, BackgroundService>();
 

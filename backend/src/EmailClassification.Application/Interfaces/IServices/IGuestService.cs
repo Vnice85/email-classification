@@ -16,7 +16,7 @@ namespace EmailClassification.Application.Interfaces.IServices
         Task<GuestEmailHeaderDTO> CreateGuestEmailAsync(CreateGuestEmailDTO email);
         Task<GuestEmailHeaderDTO?> EditGuestEmailById(string id, CreateGuestEmailDTO email);
         Task<bool> DeleteGuestEmailAsync(string emailId);
-        Task<List<GuestEmailHeaderDTO>> SearchGuestEmailAsync(ElasticFilter filter);
+        Task<List<GuestEmailSearchHeaderDTO>> SearchGuestEmailAsync(ElasticFilter filter);
 
     }
 }

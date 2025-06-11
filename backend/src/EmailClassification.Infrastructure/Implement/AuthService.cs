@@ -58,6 +58,7 @@ namespace EmailClassification.Infrastructure.Implement
                 }
                 var jwtAccessToken = GenerateJwtToken(authInfo.Email, authInfo.Name, authInfo.ProviderId);
                 var tokenItem = await _unitOfWork.Token.GetItemWhere(u => u.UserId == authInfo.Email && u.Provider == "GOOGLE");
+                var root = authInfo.GoogleAccessToken;
                 if (tokenItem == null)
                 {
                     var token = new Token()
@@ -146,6 +147,7 @@ namespace EmailClassification.Infrastructure.Implement
             {
                 return null;
             }
+            var test = tokenItem.RefreshToken;
             var refreshToken = AesHelper.Decrypt(tokenItem.RefreshToken, _configuration["Aes:Key"] ?? "");
             var clientId = _configuration["Authentication:Google:ClientId"];
             var clientSecret = _configuration["Authentication:Google:ClientSecret"];

@@ -16,6 +16,7 @@ using Hangfire;
 using EmailClassification.Infrastructure.Persistence;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 
 
 namespace EmailClassification.Infrastructure.Implement;
@@ -28,13 +29,15 @@ public class EmailService : IEmailService
     private readonly IClassificationService _classificationService;
     private readonly IEmailSearchService _emailSearchService;
     private readonly IConfiguration _configuration;
+    private readonly ILogger<EmailService> _logger;
 
     public EmailService(IUnitOfWork unitOfWork,
         IHttpContextAccessor httpContextAccessor,
         HttpClient httpClient,
         IClassificationService classificationService,
         IEmailSearchService emailSearchService,
-        IConfiguration configuration)
+        IConfiguration configuration,
+        ILogger<EmailService> logger)
     {
         _unitOfWork = unitOfWork;
         _httpContextAccessor = httpContextAccessor;
@@ -42,6 +45,7 @@ public class EmailService : IEmailService
         _classificationService = classificationService;
         _emailSearchService = emailSearchService;
         _configuration = configuration;
+        _logger = logger;
     }
 
 
@@ -70,8 +74,9 @@ public class EmailService : IEmailService
         {
             await SyncEmailsFromGmail(userId, "SENT", false);
         }
-        catch
+        catch (Exception ex)
         {
+            _logger.LogError("Failed to sync sent email for user {UserId} : {ex}", userId, ex);
             throw new Exception("Sync email failed");
         }
 
@@ -79,31 +84,249 @@ public class EmailService : IEmailService
         return (int)messageResponse.StatusCode;
     }
 
-    public Task<List<EmailHeaderDTO>> GetAllEmailsAsync(Filter filter)
+    public async Task<List<EmailHeaderDTO>> GetAllEmailsAsync(Filter filter)
     {
-        throw new NotImplementedException();
+        var userId = GetUserEmail();
+        var query = _unitOfWork.Email.AsQueryable(ls => ls.UserId == userId);
+        if (filter.LabelName != null)
+        {
+            var label = await _unitOfWork.EmailLabel.GetItemWhere(l => l.LabelName == filter.LabelName.ToUpper());
+            if (label != null)
+            {
+                query = query.Where(ls => ls.Label!.LabelName == label.LabelName);
+            }
+        }
+
+        if (!string.IsNullOrEmpty(filter.DirectionName) &&
+            Enum.TryParse<DirectionStatus>(filter.DirectionName, true, out var direction))
+        {
+            query = query.Where(ls => ls.DirectionId == (int)direction);
+        }
+
+        var emails = await query
+            .OrderByDescending(ls => ls.SentDate)
+            .Skip((filter.PageIndex - 1) * filter.PageSize)
+            .Take(filter.PageSize)
+            .Include(ls => ls.Label)
+            .AsNoTracking()
+            .ToListAsync();
+        if (!emails.Any())
+        {
+            try
+            {
+                await SyncEmailsFromGmail(userId, "INBOX", true);
+                await SyncEmailsFromGmail(userId, "SENT", true);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError("Failed to sync emails for user {UserId} : {ex}", userId, ex);
+                throw new Exception(ex.Message);
+            }
+            finally
+            {
+                emails = await query
+                    .OrderByDescending(ls => ls.SentDate)
+                    .Skip((filter.PageIndex - 1) * filter.PageSize)
+                    .Take(filter.PageSize)
+                    .Include(ls => ls.Label)
+                    .AsNoTracking()
+                    .ToListAsync();
+            }
+
+            BackgroundJob.Enqueue<IEmailService>(e => e.ClassifyAllEmails(userId));
+        }
+
+        var emailHeaderDtos = emails.Select(email => new EmailHeaderDTO
+        {
+            EmailId = email.EmailId,
+            FromAddress = email.FromAddress,
+            ToAddress = email.ToAddress,
+            Snippet = email.Snippet,
+            ReceivedDate = DateTimeHelper.FormatToVietnamTime(email.ReceivedDate),
+            SentDate = DateTimeHelper.FormatToVietnamTime(email.SentDate),
+            Subject = email.Subject,
+            DirectionName = ((DirectionStatus)email.DirectionId).ToString(),
+            LabelName = email.Label?.LabelName
+        }).ToList();
+        return emailHeaderDtos;
     }
 
 
-    public Task<EmailDTO?> GetEmailByIdAsync(string emailId)
+    public async Task<EmailDTO?> GetEmailByIdAsync(string emailId)
     {
-        throw new NotImplementedException();
+        var userId = GetUserEmail();
+        var item = await _unitOfWork.Email.AsQueryable(i => i.EmailId == emailId && i.UserId == userId)
+            .Include(i => i.Label).FirstOrDefaultAsync();
+        if (item == null)
+            return null;
+        return new EmailDTO
+        {
+            EmailId = item.EmailId,
+            FromAddress = item.FromAddress,
+            ToAddress = item.ToAddress,
+            Snippet = item.Snippet,
+            ReceivedDate = DateTimeHelper.FormatToVietnamTime(item.ReceivedDate),
+            SentDate = DateTimeHelper.FormatToVietnamTime(item.SentDate),
+            Subject = item.Subject,
+            Body = item.Body!,
+            DirectionName = ((DirectionStatus)item.DirectionId).ToString(),
+            LabelName = item.Label?.LabelName ?? "UNDEFINE"
+        };
     }
 
 
-    public Task<EmailDTO> SaveDraftEmailAsync(SendEmailDTO email)
+    public async Task<EmailDTO> SaveDraftEmailAsync(SendEmailDTO email)
     {
-        throw new NotImplementedException();
+        var userId = GetUserEmail();
+        if (email.Body == string.Empty)
+            email.Body = " ";
+        var label = await _classificationService.IdentifyLabel(email.Body!);
+        await _unitOfWork.BeginTransactionASync();
+        try
+        {
+            var labelItem = await _unitOfWork.EmailLabel.GetItemWhere(ls => ls.LabelName == label);
+            if (labelItem == null)
+            {
+                labelItem = new EmailLabel
+                {
+                    LabelName = label,
+                };
+                await _unitOfWork.EmailLabel.AddAsync(labelItem);
+                await _unitOfWork.SaveAsync();
+            }
+
+            var sendItem = new Email
+            {
+                UserId = userId,
+                EmailId = Guid.NewGuid().ToString(),
+                SentDate = DateTime.UtcNow,
+                FromAddress = userId,
+                Snippet = email.Subject,
+                ToAddress = email.ToAddress,
+                Subject = email.Subject,
+                Body = email.Body!,
+                DirectionId = (int)DirectionStatus.DRAFT,
+                LabelId = labelItem.LabelId
+            };
+            await _unitOfWork.Email.AddAsync(sendItem);
+            await _unitOfWork.SaveAsync();
+            await _unitOfWork.CommitTransactionAsync();
+            return new EmailDTO
+            {
+                EmailId = sendItem.EmailId,
+                FromAddress = sendItem.FromAddress,
+                ToAddress = sendItem.ToAddress,
+                ReceivedDate = DateTimeHelper.FormatToVietnamTime(sendItem.ReceivedDate),
+                SentDate = DateTimeHelper.FormatToVietnamTime(sendItem.SentDate),
+                Subject = sendItem.Subject,
+                Snippet = sendItem.Snippet,
+                Body = sendItem.Body,
+                DirectionName = ((DirectionStatus)sendItem.DirectionId).ToString(),
+                LabelName = labelItem.LabelName
+            };
+        }
+        catch (Exception ex)
+        {
+            await _unitOfWork.RollbackTransactionAsync();
+            _logger.LogError("Error saving draft email for user {UserId} : {ex}", userId, ex);
+            throw;
+        }
     }
 
-    public Task<EmailDTO?> UpdateDraftEmailByIdAsync(string id, SendEmailDTO email)
+    public async Task<EmailDTO?> UpdateDraftEmailByIdAsync(string id, SendEmailDTO email)
     {
-        throw new NotImplementedException();
+        var userId = GetUserEmail();
+
+        if (email.Body == string.Empty)
+            email.Body = " ";
+        var label = await _classificationService.IdentifyLabel(email.Body!);
+        await _unitOfWork.BeginTransactionASync();
+        try
+        {
+            var labelItem = await _unitOfWork.EmailLabel.GetItemWhere(ls => ls.LabelName == label);
+            if (labelItem == null)
+            {
+                labelItem = new EmailLabel
+                {
+                    LabelName = label,
+                };
+                await _unitOfWork.EmailLabel.AddAsync(labelItem);
+                await _unitOfWork.SaveAsync();
+            }
+
+            var item = await _unitOfWork.Email.GetItemWhere(ls => ls.UserId == userId && ls.EmailId == id);
+            if (item == null)
+                return null;
+            item.SentDate = DateTime.UtcNow;
+            item.Subject = email.Subject;
+            item.Snippet = email.Subject;
+            item.ToAddress = email.ToAddress;
+            item.Body = email.Body!;
+            item.LabelId = labelItem.LabelId;
+            _unitOfWork.Email.Update(item);
+            await _unitOfWork.SaveAsync();
+            await _unitOfWork.CommitTransactionAsync();
+            return new EmailDTO
+            {
+                EmailId = item.EmailId,
+                FromAddress = item.FromAddress,
+                ToAddress = item.ToAddress,
+                Snippet = item.Snippet,
+                ReceivedDate = DateTimeHelper.FormatToVietnamTime(item.ReceivedDate),
+                SentDate = DateTimeHelper.FormatToVietnamTime(item.SentDate),
+                Subject = item.Subject,
+                Body = item.Body,
+                DirectionName = ((DirectionStatus)item.DirectionId).ToString(),
+                LabelName = item.Label?.LabelName
+            };
+        }
+        catch (Exception ex)
+        {
+            await _unitOfWork.RollbackTransactionAsync();
+            _logger.LogError("Error updating draft email for user {UserId} : {ex}", userId, ex);
+            throw;
+        }
     }
 
-    public Task<int> DeleteEmailAsync(string emailId)
+    public async Task<int> DeleteEmailAsync(string emailId)
     {
-        throw new NotImplementedException();
+        var userId = GetUserEmail();
+        var accessToken = await GetAccessTokenAsync(userId);
+        var email = await _unitOfWork.Email.GetItemWhere(e => e.EmailId == emailId && e.UserId == userId);
+        if (email == null)
+            return 404;
+        await _unitOfWork.BeginTransactionASync();
+        try
+        {
+            if (email.DirectionId == (int)DirectionStatus.DRAFT)
+            {
+                _unitOfWork.Email.Remove(email);
+                await _unitOfWork.SaveAsync();
+                await _unitOfWork.CommitTransactionAsync();
+                return 204;
+            }
+
+            using var messageRequest = new HttpRequestMessage(HttpMethod.Delete,
+              _configuration["Authentication:Google:EndpointApi"] + $"/messages/{emailId}");
+            messageRequest.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
+            var messageResponse = await _httpClient.SendAsync(messageRequest);
+            if (messageResponse.IsSuccessStatusCode)
+            {
+                _unitOfWork.Email.Remove(email);
+                await _unitOfWork.SaveAsync();
+                await _emailSearchService.DeleteAsync(emailId);
+                await _unitOfWork.CommitTransactionAsync();
+                return 204;
+            }
+
+            return (int)messageResponse.StatusCode;
+        }
+        catch (Exception ex)
+        {
+            await _unitOfWork.RollbackTransactionAsync();
+            _logger.LogError("Error deleting email {EmailId} for user {UserId} : {ex}", emailId, userId, ex);
+            return 500;
+        }
     }
 
 
@@ -113,14 +336,19 @@ public class EmailService : IEmailService
             t => t.UserId == userId && t.Provider.ToUpper() == "GOOGLE");
         if (token == null || string.IsNullOrWhiteSpace(token.AccessToken) || token.ExpiresAt < DateTime.UtcNow)
             return 0;
+        // Decrypt accesstoken before using it
+        // NOTE: mustn't use token.AccessToken directly, because it is encrypted in database
+        // and have background job using it
+        // so if you use like this : token.accessToken = AesHelper.Decrypt(token.AccessToken, _configuration["Aes:Key"] ?? "");
+        // boooom, it will cause error in background job =)))))
+        var accessToken = await GetAccessTokenAsync(userId);
         List<string> responseEmailsId = syncAllEmails
-            ? await GetLatestEmailId(directionName, token.AccessToken)
-            : await GetNewEmailsIdFromHistory(userId, directionName, token.AccessToken);
+            ? await GetLatestEmailId(directionName, accessToken)
+            : await GetNewEmailsIdFromHistory(userId, directionName, accessToken);
         if (!responseEmailsId.Any())
         {
             return 0;
         }
-
         var existEmails = await _unitOfWork.Email
             .AsQueryable(e => responseEmailsId
                 .Contains(e.EmailId))
@@ -142,7 +370,7 @@ public class EmailService : IEmailService
         await Parallel.ForEachAsync(listId.Where(id => !string.IsNullOrWhiteSpace(id)), options,
             async (emailId, _) =>
             {
-                await ProcessEmailAsync(emailId, token.AccessToken, userId, directionName, newEmails);
+                await ProcessEmailAsync(emailId, accessToken, userId, directionName, newEmails);
             });
         await _unitOfWork.BulkInsertAsync(newEmails.ToList());
         await _emailSearchService.BulkIndexAsync(newEmails.ToList());
@@ -161,8 +389,7 @@ public class EmailService : IEmailService
     }
 
 
-    public async Task<List<string>> GetNewEmailsIdFromHistory(string userId, string directionName,
-        string accessToken)
+    public async Task<List<string>> GetNewEmailsIdFromHistory(string userId, string directionName, string accessToken)
     {
         var latestItemInDb = await _unitOfWork.Email.AsQueryable(l => l.UserId == userId)
             .OrderByDescending(l => Convert.ToInt64(l.HistoryId))
@@ -182,7 +409,7 @@ public class EmailService : IEmailService
             using var request = new HttpRequestMessage();
             request.Method = HttpMethod.Get;
             request.RequestUri = new Uri(
-              _configuration["Authentication:Google:EndpointApi"] + "/history?startHistoryId={latestItemInDb}" +
+              _configuration["Authentication:Google:EndpointApi"] + $"/history?startHistoryId={latestItemInDb}" +
                 $"&maxResults=500&historyTypes=messageAdded" +
                 $"{(string.IsNullOrEmpty(nextPageToken) ? "" : $"&pageToken={nextPageToken}")}");
 
@@ -203,12 +430,14 @@ public class EmailService : IEmailService
                     {
                         foreach (var msgAdded in messagesAdded)
                         {
-                            string id = msgAdded["message"]?["id"]?.ToString();
-                            var labels = msgAdded["message"]?["labelIds"]?.ToObject<List<string>>() ?? new();
-
-                            if (!string.IsNullOrEmpty(id) && labels.Contains(upperDirection))
+                            string? id = msgAdded["message"]?["id"]?.ToString();
+                            if (!string.IsNullOrEmpty(id))
                             {
-                                listEmailId.Add(id);
+                                var labels = msgAdded["message"]?["labelIds"]?.ToObject<List<string>>() ?? new();
+                                if (labels.Contains(upperDirection))
+                                {
+                                    listEmailId.Add(id);
+                                }
                             }
                         }
                     }
@@ -228,7 +457,7 @@ public class EmailService : IEmailService
         using var request = new HttpRequestMessage();
         request.Method = HttpMethod.Get;
         request.RequestUri =
-            new Uri(_configuration["Authentication:Google:EndpointApi"] + "/messages?labelIds={directionName}");
+            new Uri(_configuration["Authentication:Google:EndpointApi"] + $"/messages?labelIds={directionName}");
         request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
         var response = await _httpClient.SendAsync(request);
         response.EnsureSuccessStatusCode();
@@ -250,7 +479,7 @@ public class EmailService : IEmailService
         try
         {
             using var request = new HttpRequestMessage(HttpMethod.Get,
-                  _configuration["Authentication:Google:EndpointApi"] + "/messages/{emailId}");
+                  _configuration["Authentication:Google:EndpointApi"] + $"/messages/{emailId}");
             request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", accessToken);
 
             var response = await _httpClient.SendAsync(request);
@@ -267,7 +496,6 @@ public class EmailService : IEmailService
                 FromAddress = emailInfo.FromAddress,
                 ToAddress = emailInfo.ToAddress,
                 Subject = emailInfo.Subject,
-                //Body = GZip.CompressStringToBase64(emailInfo.Body!),
                 Body = emailInfo.Body!,
                 PlainText = emailInfo.PlainText,
                 Snippet = emailInfo.Snippet,
@@ -276,38 +504,99 @@ public class EmailService : IEmailService
                 DirectionId = (int)Enum.Parse(typeof(DirectionStatus), directionName.ToUpper()),
                 UserId = userEmail,
                 HistoryId = emailInfo.HistoryId,
-                //LabelId = labelItem.LabelId
             });
         }
-        catch
+        catch (Exception ex)
         {
-            // log, i will add later
+            _logger.LogError(ex, "Error processing email {EmailId} for user {UserEmail}", emailId, userEmail);
+            throw;
         }
     }
 
 
     public async Task ClassifyAllEmails(string userId)
     {
-        throw new NotImplementedException();
-    }
+        var semaphore = new SemaphoreSlim(1, 1);
+        var emails = new List<Email>();
+        do
+        {
+            emails.Clear();
+            var labels = await _unitOfWork.EmailLabel.AsQueryable().AsNoTracking().ToListAsync();
+            var query = _unitOfWork.Email.AsQueryable(e => e.LabelId == null && e.UserId == userId).Take(100)
+                .Select(e => new Email { EmailId = e.EmailId, Body = e.Body });
+            emails.AddRange(await query.ToListAsync());
+            var tasks = emails.Select(async item =>
+            {
+                //string body = GZip.DecompressFromBase64ToString(item.Body!);
+                string body = item.Body!;
+                string labelName = await _classificationService.IdentifyLabel(body);
 
+                var labelItem = labels.FirstOrDefault(l => l.LabelName == labelName);
+                if (labelItem == null)
+                {
+                    await semaphore.WaitAsync();
+                    try
+                    {
+                        labelItem = labels.FirstOrDefault(l => l.LabelName == labelName);
+                        if (labelItem == null)
+                        {
+                            labelItem = new EmailLabel { LabelName = labelName };
+                            await _unitOfWork.EmailLabel.AddAsync(labelItem);
+                            await _unitOfWork.SaveAsync();
+                            labels.Add(labelItem);
+                        }
+                    }
+                    finally
+                    {
+                        semaphore.Release();
+                    }
+                }
+
+                item.LabelId = labelItem.LabelId;
+            });
+            await Task.WhenAll(tasks);
+            try
+            {
+                await _unitOfWork.BulkUpdateAsync(emails, new BulkConfig
+                {
+                    PropertiesToInclude = new List<string> { nameof(Email.EmailId), nameof(Email.LabelId) },
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError("Error updating labels for user {UserId}: {Message}", userId, ex);
+                throw;
+            }
+        } while (emails.Any());
+    }
 
     public string GetUserEmail()
     {
         var user = _httpContextAccessor.HttpContext?.User;
         if (user == null)
+        {
+            _logger.LogError("User not found in HTTP context");
             throw new Exception("User not found");
+        }
         var email = user.FindFirst(ClaimTypes.Email)?.Value;
         if (string.IsNullOrEmpty(email))
+        {
+            _logger.LogError("Email claim not found");
             throw new Exception("Email claim not found");
+        }
         return email;
     }
     public async Task<string> GetAccessTokenAsync(string email)
     {
+
         var token = await _unitOfWork.Token.GetItemWhere(t => t.UserId.Trim() == email.Trim() && t.Provider.Trim() == "GOOGLE");
-        if (token == null)
+        if (token == null || string.IsNullOrWhiteSpace(token.AccessToken) || token.ExpiresAt < DateTime.UtcNow)
+        {
+            _logger.LogError("Access token not found for user {Email}", email);
             throw new Exception("Access token not found");
-        return token.AccessToken ?? throw new Exception("Access token is null");
+        }
+        var decryptAccessToken = AesHelper.Decrypt(token.AccessToken ?? "", _configuration["Aes:Key"] ?? "");
+        return decryptAccessToken ?? throw new Exception("Access token is null");
     }
 
 

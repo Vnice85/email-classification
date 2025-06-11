@@ -224,7 +224,7 @@ namespace EmailClassification.Application.Services
             return guestEmails;
         }
 
-        public async Task<List<GuestEmailHeaderDTO>> SearchGuestEmailAsync(ElasticFilter filter)
+        public async Task<List<GuestEmailSearchHeaderDTO>> SearchGuestEmailAsync(ElasticFilter filter)
         {
             var ls = await _emailSearchService.SearchAsync(guestId!, filter);
             var labelName = _unitOfWork.EmailLabel.AsQueryable().ToList();
@@ -233,13 +233,12 @@ namespace EmailClassification.Application.Services
             {
                 labelNameDict.Add(item.LabelId, item.LabelName!);
             }
-            var guestEmails = ls.Select(email => new GuestEmailHeaderDTO
+            var guestEmails = ls.Select(email => new GuestEmailSearchHeaderDTO
             {
                 EmailId = email.EmailId,
                 Subject = email.Subject,
                 Snippet = email.Snippet,
                 SaveDate = email.SentDate,
-                LabelName = email.LabelId != 0 ? labelNameDict[email.LabelId] : "UNDEFINE" 
             }).OrderByDescending(d => d.SaveDate).ToList();
             return guestEmails;
         }

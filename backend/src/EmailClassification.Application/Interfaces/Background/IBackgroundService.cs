@@ -9,5 +9,7 @@ namespace EmailClassification.Application.Interfaces.Background
     public interface IBackgroundService
     {
         Task DeleteGuestAsync();
+        Task SyncAllUsersEmails();
+        Task ClassifyAllUsersEmails();
     }
 }

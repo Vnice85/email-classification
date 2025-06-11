@@ -1,20 +1,14 @@
-﻿using System;
-using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using System.ComponentModel.DataAnnotations;
 
-namespace EmailClassification.Application.DTOs.Email
+namespace EmailClassification.Application.DTOs.Email;
+
+public class SendEmailDTO
 {
-    public class SendEmailDTO
-    {
-        [Required(ErrorMessage = "To address is required.")]
-        [EmailAddress(ErrorMessage = "Incorrect email format")]
-        public string? ToAddress { get; set; }
+    [Required(ErrorMessage = "To address is required.")]
+    [EmailAddress(ErrorMessage = "Incorrect email format")]
+    public string? ToAddress { get; set; }
 
-        public string? Subject { get; set; }
+    public string? Subject { get; set; }
 
-        public string? Body { get; set; }
-    }
+    public string? Body { get; set; }
 }

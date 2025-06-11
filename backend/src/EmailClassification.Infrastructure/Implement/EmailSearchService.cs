@@ -99,7 +99,7 @@ namespace EmailClassification.Infrastructure.Implement
             return response.IsValid && response.Result == Result.Deleted;
         }
 
-        public async Task<List<EmailHeaderDTO>> SearchAsync(string userId, ElasticFilter filter)
+        public async Task<List<EmailSearchHeaderDTO>> SearchAsync(string userId, ElasticFilter filter)
         {
             var response = await _client.SearchAsync<Email>(s => s
                 .Index(index)
@@ -127,7 +127,7 @@ namespace EmailClassification.Infrastructure.Implement
                     )
                 )
             );
-            return response.Documents.Select(email => new EmailHeaderDTO
+            return response.Documents.Select(email => new EmailSearchHeaderDTO
             {
                 EmailId = email.EmailId,
                 FromAddress = email.FromAddress,
@@ -136,9 +136,8 @@ namespace EmailClassification.Infrastructure.Implement
                 ReceivedDate = DateTimeHelper.FormatToVietnamTime(email.ReceivedDate),
                 SentDate = DateTimeHelper.FormatToVietnamTime(email.SentDate),
                 Subject = email.Subject,
-                DirectionName = ((DirectionStatus)email.DirectionId).ToString(),
-                LabelId = email.LabelId == null ? 0 : email.LabelId.Value
-            }).ToList();
+                DirectionName = ((DirectionStatus)email.DirectionId).ToString()
+            }).OrderByDescending(e=>e.EmailId).ToList();
         }
 
         //public async Task<bool> UpdateAsync(Email email)
