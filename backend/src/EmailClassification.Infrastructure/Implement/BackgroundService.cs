@@ -19,11 +19,15 @@ namespace EmailClassification.Infrastructure.Implement
     {
         private readonly IUnitOfWork _unitOfWork;
         private readonly ILogger<BackgroundService> _logger;
+        private readonly IEmailSearchService _emailSearchService;
 
-        public BackgroundService(IUnitOfWork unitOfWork, ILogger<BackgroundService> logger)
+        public BackgroundService(IUnitOfWork unitOfWork, 
+                                ILogger<BackgroundService> logger,
+                                IEmailSearchService emailSearchService)
         {
             _unitOfWork = unitOfWork;
             _logger = logger;
+            _emailSearchService = emailSearchService;
         }
 
         public async Task DeleteGuestAsync()
@@ -50,6 +54,16 @@ namespace EmailClassification.Infrastructure.Implement
                 _unitOfWork.AppUser.RemoveRange(guests);
                 await _unitOfWork.SaveAsync();
                 await _unitOfWork.CommitTransactionAsync();
+                try
+                {
+                    var deleteTasks = guests.Select(u => _emailSearchService.DeleteByUserIdAsync(u.UserId));
+                    await Task.WhenAll(deleteTasks);
+                }
+                catch (Exception esEx)
+                {
+                    _logger.LogError(esEx, "Error when deleting guest emails in Elasticsearch");
+                }
+
 
             }
             catch (Exception ex)

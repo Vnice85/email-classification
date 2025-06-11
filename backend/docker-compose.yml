@@ -6,15 +6,39 @@ services:
     image: ${EMAIL_API_IMAGE}
     container_name: ${EMAIL_API_CONTAINER}
     ports:  
-      - "{BACKEND_PORT}:8080"
+      - "${BACKEND_PORT}:8081"
     depends_on:
       - postgres
       - elastic
     environment:
       - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT}
+      - ASPNETCORE_URLS=${ASPNETCORE_URLS}
+      - ASPNETCORE_Kestrel__Certificates__Default__Path=${CERT_PATH}
+      - ASPNETCORE_Kestrel__Certificates__Default__Password=${CERT_PASSWORD}
       - ConnectionStrings__DefaultConnection=Host=${DB_HOST};Port=${DB_PORT};Database=${DB_NAME};UserId=${DB_USER};Password=${DB_PASSWORD};
+       
+        # Elastic Search
       - Elastic__Url=${ELASTIC_URL}
       - Elastic__Index=${ELASTIC_INDEX}
+
+       # Google Authentication
+      - Authentication__Google__ClientId=${GOOGLE_CLIENT_ID}
+      - Authentication__Google__ProjectId=${GOOGLE_PROJECT_ID}
+      - Authentication__Google__AuthUri=${GOOGLE_AUTH_URI}
+      - Authentication__Google__EndpointApi=${GOOGLE_ENDPOINT_API}
+      - Authentication__Google__TokenUri=${GOOGLE_TOKEN_URI}
+      - Authentication__Google__auth_provider_x509_cert_url=${GOOGLE_CERT_URL}
+      - Authentication__Google__ClientSecret=${GOOGLE_CLIENT_SECRET}
+      - Authentication__Google__CallbackPath=${GOOGLE_CALLBACK_PATH}
+
+      # JWT Authentication
+      - Authentication__Jwt__Issuer=${JWT_ISSUER}
+      - Authentication__Jwt__Audience=${JWT_AUDIENCE}
+      - Authentication__Jwt__Key=${JWT_KEY}
+      - Authentication__Jwt__ExpiryInMinutes=${JWT_EXPIRY_MINUTES}
+
+      # AES Encryption
+      - Aes__Key=${AES_KEY}
     networks:
       - emailcf
 
@@ -39,7 +63,7 @@ services:
       - discovery.type=single-node
       - xpack.security.enabled=false
     ports:
-      - "{ELASTIC_PORT}:9200"
+      - "${ELASTIC_PORT}:9200"
     volumes:
       - esdata:/usr/share/elasticsearch/data
     networks:

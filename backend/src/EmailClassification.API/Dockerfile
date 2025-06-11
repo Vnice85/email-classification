@@ -4,6 +4,7 @@ WORKDIR /app
 EXPOSE 8080
 EXPOSE 8081
 
+
 FROM mcr.microsoft.com/dotnet/sdk:8.0 AS build
 ARG BUILD_CONFIGURATION=Release
 WORKDIR /src
@@ -23,4 +24,5 @@ RUN dotnet publish "EmailClassification.API.csproj" -c $BUILD_CONFIGURATION -o /
 FROM base AS final
 WORKDIR /app
 COPY --from=publish /app/publish .
+COPY certs/email-classification.pfx /https/email-classification.pfx
 ENTRYPOINT ["dotnet", "EmailClassification.API.dll"]

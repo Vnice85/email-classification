@@ -140,6 +140,25 @@ namespace EmailClassification.Infrastructure.Implement
             }).OrderByDescending(e=>e.EmailId).ToList();
         }
 
+        public Task DeleteByUserIdAsync(string userId)
+        {
+           var response = _client.DeleteByQueryAsync<Email>(d => d
+                .Index(index)
+                .Query(q => q
+                    .Term(t => t
+                        .Field("userId.keyword")
+                        .Value(userId)
+                    )
+                )
+            );
+            if (!response.Result.IsValid)
+            {
+                _logger.LogError("Failed to delete by userId: " + response.Result.DebugInformation);
+                throw new Exception("Failed to delete by userId: " + response.Result.DebugInformation);
+            }
+            return response;
+        }
+
         //public async Task<bool> UpdateAsync(Email email)
         //{
         //    var response = await _client.UpdateAsync<Email, object>(email.EmailId, u => u
