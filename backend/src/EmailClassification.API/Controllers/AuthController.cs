@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Authentication.Google;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
+using Microsoft.AspNetCore.Authorization;
 
 namespace EmailClassification.API.Controllers
 {
@@ -50,37 +51,39 @@ namespace EmailClassification.API.Controllers
             };
             var response = await _authService.LoginResponse(authInfo);
             var html = $@"
-                        <!DOCTYPE html>
-                        <html>
-                        <head>
-                            <title>Logging in...</title>
-                        </head>
-                        <body>
-                            <script>
-                                (function() {{
-                                    const jwt = '{response!.JwtAccessToken}';
-                                    window.opener?.postMessage({{ token: jwt }}, '*');
-                                    window.close();
-                                }})();
-                            </script>
-                            <p>Logging in...</p>
-                        </body>
-                        </html>";
+                <!DOCTYPE html>
+                <html>
+                <head>
+                    <title>Logging in...</title>
+                </head>
+                <body>
+                    <script>
+                        (function() {{
+                            const authData = {{
+                                userId: '{response!.UserId}',
+                                userName: '{response.UserName}',
+                                jwt: '{response.JwtAccessToken}',
+                                profileImage: '{response.ProfileImage}',
+                                expiresAt: '{response.ExpiresAt}'
+                            }};
+                            window.opener?.postMessage(authData, '*');
+                            window.close();
+                        }})();
+                    </script>
+                    <p>Logging in...</p>
+                </body>
+                </html>";
+
             return Content(html, "text/html");
-            //return Ok(response);
         }
 
+        [Authorize]
         [HttpGet("RefreshToken")]
         public async Task<IActionResult> RefreshToken()
         {
-            var item = await HttpContext.AuthenticateAsync(CookieAuthenticationDefaults.AuthenticationScheme);
-            if (!item.Succeeded)
-            {
-                return StatusCode(401);
-            }
-            var userId = item.Principal.FindFirst(ClaimTypes.Email)?.Value;
-            var name = item.Principal.FindFirst(ClaimTypes.Name)?.Value;
-            var providerId = item.Principal.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+            var userId = User.FindFirst(ClaimTypes.Email)?.Value;
+            var name = User.FindFirst(ClaimTypes.Name)?.Value;
+            var providerId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
             if (string.IsNullOrEmpty(userId)
                || string.IsNullOrEmpty(name)
                || string.IsNullOrEmpty(providerId))
