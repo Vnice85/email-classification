@@ -58,21 +58,24 @@ namespace EmailClassification.Infrastructure.Implement
                 }
                 var jwtAccessToken = GenerateJwtToken(authInfo.Email, authInfo.Name, authInfo.ProviderId);
                 var tokenItem = await _unitOfWork.Token.GetItemWhere(u => u.UserId == authInfo.Email && u.Provider == "GOOGLE");
-                var root = authInfo.GoogleAccessToken;
                 if (tokenItem == null)
                 {
                     var token = new Token()
                     {
                         Provider = "GOOGLE",
-                        AccessToken = AesHelper.Encrypt(authInfo.GoogleAccessToken?? "", _configuration["Aes:Key"] ?? ""),
-                        RefreshToken =AesHelper.Encrypt(authInfo.GoogleRefreshToken ?? "", _configuration["Aes:Key"] ?? ""),
-                        ExpiresAt = DateTime.UtcNow.AddMinutes(60),
+                        AccessToken = AesHelper.Encrypt(authInfo.GoogleAccessToken ?? "", _configuration["Aes:Key"] ?? ""),
+                        RefreshToken = AesHelper.Encrypt(authInfo.GoogleRefreshToken ?? "", _configuration["Aes:Key"] ?? ""),
+                        ExpiresAt = DateTime.UtcNow.AddHours(8),
                         UserId = authInfo.Email,
                     };
                     await _unitOfWork.Token.AddAsync(token);
                 }
                 else
                 {
+                    if (!string.IsNullOrEmpty(authInfo.GoogleRefreshToken))
+                    {
+                        tokenItem.RefreshToken = AesHelper.Encrypt(authInfo.GoogleRefreshToken ?? "", _configuration["Aes:Key"] ?? "");
+                    }
                     tokenItem.AccessToken = AesHelper.Encrypt(authInfo.GoogleAccessToken ?? "", _configuration["Aes:Key"] ?? "");
                     tokenItem.ExpiresAt = DateTime.UtcNow.AddMinutes(60);
                     _unitOfWork.Token.Update(tokenItem);
@@ -147,7 +150,6 @@ namespace EmailClassification.Infrastructure.Implement
             {
                 return null;
             }
-            var test = tokenItem.RefreshToken;
             var refreshToken = AesHelper.Decrypt(tokenItem.RefreshToken, _configuration["Aes:Key"] ?? "");
             var clientId = _configuration["Authentication:Google:ClientId"];
             var clientSecret = _configuration["Authentication:Google:ClientSecret"];

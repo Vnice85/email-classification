@@ -38,6 +38,7 @@ namespace EmailClassification.API.Controllers
             }
             var test = await HttpContext.GetTokenAsync(CookieAuthenticationDefaults.AuthenticationScheme, "refresh_token");
             Console.WriteLine(test);
+            var a =  await HttpContext.GetTokenAsync(CookieAuthenticationDefaults.AuthenticationScheme, "refresh_token");
             var authInfo = new AuthInfoDTO
             {
                 Email = result.Principal.FindFirst(ClaimTypes.Email)?.Value,

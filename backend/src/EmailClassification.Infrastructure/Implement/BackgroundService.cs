@@ -30,6 +30,7 @@ namespace EmailClassification.Infrastructure.Implement
             _emailSearchService = emailSearchService;
         }
 
+        [DisableConcurrentExecution(timeoutInSeconds: 600)]
         public async Task DeleteGuestAsync()
         {
             // this service's used with background service to delete all data of guest after 3 days
