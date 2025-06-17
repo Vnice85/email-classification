@@ -17,6 +17,7 @@ using EmailClassification.Infrastructure.Persistence;
 using System.Text.RegularExpressions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using EmailClassification.Application.DTOs.Classification;
 
 
 namespace EmailClassification.Infrastructure.Implement;
@@ -152,25 +153,27 @@ public class EmailService : IEmailService
     }
 
 
-    public async Task<EmailDTO?> GetEmailByIdAsync(string emailId)
+    public async Task<EmailDetailDTO?> GetEmailByIdAsync(string emailId)
     {
         var userId = GetUserEmail();
         var item = await _unitOfWork.Email.AsQueryable(i => i.EmailId == emailId && i.UserId == userId)
             .Include(i => i.Label).FirstOrDefaultAsync();
         if (item == null)
             return null;
-        return new EmailDTO
+        return new EmailDetailDTO
         {
             EmailId = item.EmailId,
             FromAddress = item.FromAddress,
             ToAddress = item.ToAddress,
-            Snippet = item.Snippet,
             ReceivedDate = DateTimeHelper.FormatToVietnamTime(item.ReceivedDate),
             SentDate = DateTimeHelper.FormatToVietnamTime(item.SentDate),
             Subject = item.Subject,
             Body = item.Body!,
             DirectionName = ((DirectionStatus)item.DirectionId).ToString(),
-            LabelName = item.Label?.LabelName ?? "UNDEFINE"
+            LabelName = item.Label?.LabelName ?? "UNDEFINE",
+            Details = string.IsNullOrEmpty(item.PredictionResult)
+                ? new ClassificationResult()
+                : JsonConvert.DeserializeObject<ClassificationResult>(item.PredictionResult) ?? new ClassificationResult()
         };
     }
 
@@ -180,7 +183,23 @@ public class EmailService : IEmailService
         var userId = GetUserEmail();
         if (email.Body == string.Empty)
             email.Body = " ";
-        var label = await _classificationService.IdentifyLabel(email.Body!);
+
+        var emailContent = new EmailContent
+        {
+            From = userId,
+            To = email.ToAddress ?? "",
+            Subject = email.Subject ?? "",
+            Body = email.Body ?? "",
+            Date = DateTimeOffset.UtcNow.ToOffset(TimeSpan.FromHours(7))
+        };
+        var label = "UNDEFINE";
+        var jsonString = await _classificationService.IdentifyLabel(emailContent);
+        if (jsonString != null)
+        {
+            var classificationResult = JsonConvert.DeserializeObject<ClassificationResult>(jsonString);
+            if (classificationResult != null)
+                label = classificationResult?.Probability >= 0.5 ? "SPAM" : "NORMAL";
+        }
         await _unitOfWork.BeginTransactionASync();
         try
         {
@@ -206,7 +225,8 @@ public class EmailService : IEmailService
                 Subject = email.Subject,
                 Body = email.Body!,
                 DirectionId = (int)DirectionStatus.DRAFT,
-                LabelId = labelItem.LabelId
+                LabelId = labelItem.LabelId,
+                PredictionResult = jsonString
             };
             await _unitOfWork.Email.AddAsync(sendItem);
             await _unitOfWork.SaveAsync();
@@ -220,7 +240,6 @@ public class EmailService : IEmailService
                 SentDate = DateTimeHelper.FormatToVietnamTime(sendItem.SentDate),
                 Subject = sendItem.Subject,
                 Snippet = sendItem.Snippet,
-                Body = sendItem.Body,
                 DirectionName = ((DirectionStatus)sendItem.DirectionId).ToString(),
                 LabelName = labelItem.LabelName
             };
@@ -239,7 +258,22 @@ public class EmailService : IEmailService
 
         if (email.Body == string.Empty)
             email.Body = " ";
-        var label = await _classificationService.IdentifyLabel(email.Body!);
+        var emailContent = new EmailContent
+        {
+            From = userId,
+            To = email.ToAddress ?? "",
+            Subject = email.Subject ?? "",
+            Body = email.Body ?? "",
+            Date = DateTimeOffset.UtcNow.ToOffset(TimeSpan.FromHours(7))
+        };
+        var jsonString = await _classificationService.IdentifyLabel(emailContent);
+        var label = "UNDEFINE";
+        if (jsonString != null)
+        {
+            var classificationResult = JsonConvert.DeserializeObject<ClassificationResult>(jsonString);
+            if (classificationResult != null)
+                label = classificationResult?.Probability >= 0.5 ? "SPAM" : "NORMAL";
+        }
         await _unitOfWork.BeginTransactionASync();
         try
         {
@@ -263,6 +297,7 @@ public class EmailService : IEmailService
             item.ToAddress = email.ToAddress;
             item.Body = email.Body!;
             item.LabelId = labelItem.LabelId;
+            item.PredictionResult = jsonString;
             _unitOfWork.Email.Update(item);
             await _unitOfWork.SaveAsync();
             await _unitOfWork.CommitTransactionAsync();
@@ -275,7 +310,6 @@ public class EmailService : IEmailService
                 ReceivedDate = DateTimeHelper.FormatToVietnamTime(item.ReceivedDate),
                 SentDate = DateTimeHelper.FormatToVietnamTime(item.SentDate),
                 Subject = item.Subject,
-                Body = item.Body,
                 DirectionName = ((DirectionStatus)item.DirectionId).ToString(),
                 LabelName = item.Label?.LabelName
             };
@@ -523,14 +557,36 @@ public class EmailService : IEmailService
             emails.Clear();
             var labels = await _unitOfWork.EmailLabel.AsQueryable().AsNoTracking().ToListAsync();
             var query = _unitOfWork.Email.AsQueryable(e => e.LabelId == null && e.UserId == userId).Take(100)
-                .Select(e => new Email { EmailId = e.EmailId, Body = e.Body });
+                .Select(e => new Email
+                {
+                    EmailId = e.EmailId,
+                    Body = e.Body,
+                    Subject = e.Subject,
+                    FromAddress = e.FromAddress,
+                    ToAddress = e.ToAddress,
+                    ReceivedDate = e.ReceivedDate,
+                    SentDate = e.SentDate
+                });
             emails.AddRange(await query.ToListAsync());
             var tasks = emails.Select(async item =>
             {
-                //string body = GZip.DecompressFromBase64ToString(item.Body!);
-                string body = item.Body!;
-                string labelName = await _classificationService.IdentifyLabel(body);
+                var emailContent = new EmailContent
+                {
+                    From = userId,
+                    To = item.ToAddress ?? "",
+                    Subject = item.Subject ?? "",
+                    Body = item.Body ?? "",
+                    Date = new DateTimeOffset(item.SentDate ?? item.ReceivedDate ?? DateTime.UtcNow, TimeSpan.FromHours(7))
 
+                };
+                var jsonString = await _classificationService.IdentifyLabel(emailContent);
+                var labelName = "UNDEFINE";
+                if (jsonString != null)
+                {
+                    var classificationResult = JsonConvert.DeserializeObject<ClassificationResult>(jsonString);
+                    if (classificationResult != null)
+                        labelName = classificationResult?.Probability >= 0.5 ? "SPAM" : "NORMAL";
+                }
                 var labelItem = labels.FirstOrDefault(l => l.LabelName == labelName);
                 if (labelItem == null)
                 {
@@ -553,13 +609,14 @@ public class EmailService : IEmailService
                 }
 
                 item.LabelId = labelItem.LabelId;
+                item.PredictionResult = jsonString;
             });
             await Task.WhenAll(tasks);
             try
             {
                 await _unitOfWork.BulkUpdateAsync(emails, new BulkConfig
                 {
-                    PropertiesToInclude = new List<string> { nameof(Email.EmailId), nameof(Email.LabelId) },
+                    PropertiesToInclude = new List<string> { nameof(Email.EmailId), nameof(Email.LabelId), nameof(Email.PredictionResult) },
                 });
             }
             catch (Exception ex)

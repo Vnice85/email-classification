@@ -10,6 +10,8 @@ namespace EmailClassification.Application.DTOs.Guest
     public class GuestEmailHeaderDTO
     {
         public string EmailId { get; set; } = null!;
+        public string? From { get; set; } = null!;
+        public string? To { get; set; } = null!;
 
         public string? SaveDate { get; set; }   
 

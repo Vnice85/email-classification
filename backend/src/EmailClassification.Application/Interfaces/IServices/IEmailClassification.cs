@@ -1,4 +1,6 @@
-﻿using System;
+﻿using EmailClassification.Application.DTOs.Classification;
+using Newtonsoft.Json.Linq;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -8,6 +10,6 @@ namespace EmailClassification.Application.Interfaces.IServices
 {
     public interface IClassificationService
     {
-        Task<string> IdentifyLabel(string emailContent);
+        Task<string?> IdentifyLabel(EmailContent emailContent);
     }
 }

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations.Schema;
 
 namespace EmailClassification.Infrastructure.Persistence;
 
@@ -30,6 +31,9 @@ public partial class Email
     public string? Snippet { get; set; }
 
     public string? PlainText { get; set; }
+
+    [Column("prediction_result", TypeName = "jsonb")]
+    public string? PredictionResult { get; set; }
 
     public virtual EmailDirection Direction { get; set; } = null!;
 

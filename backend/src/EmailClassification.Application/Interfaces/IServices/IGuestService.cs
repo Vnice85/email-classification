@@ -11,7 +11,7 @@ namespace EmailClassification.Application.Interfaces.IServices
     public interface IGuestService
     {
         Task<string> GenerateGuestIdAsync();
-        Task<EmailDetailDTO?> GetGuestEmailByIdAsync(string id);
+        Task<GuestEmailDetailDTO?> GetGuestEmailByIdAsync(string id);
         Task<List<GuestEmailHeaderDTO>> GetGuestEmailsAsync(GuestFilter filter);
         Task<GuestEmailHeaderDTO> CreateGuestEmailAsync(CreateGuestEmailDTO email);
         Task<GuestEmailHeaderDTO?> EditGuestEmailById(string id, CreateGuestEmailDTO email);

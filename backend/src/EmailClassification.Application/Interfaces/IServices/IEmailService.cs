@@ -11,7 +11,7 @@ namespace EmailClassification.Application.Interfaces.IServices
     {
         Task<int> SendEmailAsync(SendEmailDTO email);
         Task<List<EmailHeaderDTO>> GetAllEmailsAsync(Filter filter);
-        Task<EmailDTO?> GetEmailByIdAsync(string emailId);
+        Task<EmailDetailDTO?> GetEmailByIdAsync(string emailId);
 
         Task<EmailDTO> SaveDraftEmailAsync(SendEmailDTO email);
         Task<EmailDTO?> UpdateDraftEmailByIdAsync(string draftId, SendEmailDTO email);

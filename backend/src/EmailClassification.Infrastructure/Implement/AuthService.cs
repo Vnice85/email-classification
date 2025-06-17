@@ -112,7 +112,13 @@ namespace EmailClassification.Infrastructure.Implement
             {
                 return null;
             }
+           
             var oldToken = await _unitOfWork.Token.GetItemWhere(u => u.UserId == userId && u.Provider.ToUpper() == "GOOGLE");
+            if (oldToken!= null && oldToken.ExpiresAt < DateTime.UtcNow)
+            {
+                _logger.LogError("Access token has expired for user {userId}", userId);
+                return null;
+            }
             if (oldToken == null)
             {
                 var newToken = new Token()

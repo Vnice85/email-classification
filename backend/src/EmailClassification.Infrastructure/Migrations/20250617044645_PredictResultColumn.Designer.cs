@@ -3,6 +3,7 @@ using System;
 using EmailClassification.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 
@@ -11,9 +12,11 @@ using Npgsql.EntityFrameworkCore.PostgreSQL.Metadata;
 namespace EmailClassification.Infrastructure.Migrations
 {
     [DbContext(typeof(EmaildbContext))]
-    partial class EmaildbContextModelSnapshot : ModelSnapshot
+    [Migration("20250617044645_PredictResultColumn")]
+    partial class PredictResultColumn
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -87,8 +90,7 @@ namespace EmailClassification.Infrastructure.Migrations
                         .HasColumnName("plain_text");
 
                     b.Property<string>("PredictionResult")
-                        .HasColumnType("jsonb")
-                        .HasColumnName("prediction_result");
+                        .HasColumnType("jsonb");
 
                     b.Property<DateTime?>("ReceivedDate")
                         .HasColumnType("timestamp with time zone")
