@@ -21,13 +21,13 @@ namespace EmailClassification.Infrastructure.Implement
             _configuration = configuration;
         }
 
-        public async Task<string?> IdentifyLabel(EmailContent emailContent)
+        public async Task<string?> IdentifyLabel(string emailContent)
         {
             try
             {
-                //var endpoint = _configuration["ClassificationApi:Endpoint"];
+                ////var endpoint = _configuration["ClassificationApi:Endpoint"];
 
-                //var emlBytes = EmailConverter.ConvertToEml(emailContent);
+                ////var emlBytes = EmailConverter.ConvertToEml(emailContent);
 
                 //using var content = new MultipartFormDataContent();
                 //var byteContent = new ByteArrayContent(emlBytes);
@@ -35,43 +35,34 @@ namespace EmailClassification.Infrastructure.Implement
 
                 //content.Add(byteContent, "file", "email.eml");
 
-                //var response = await _httpClient.PostAsync(endpoint, content);
+                var endpoint = _configuration["ClassificationApi:Endpoint"];
+                var payload = new { text = emailContent };
+                var json = JsonConvert.SerializeObject(payload);
+                var content = new StringContent(json, Encoding.UTF8, "application/json");
 
-                //if (!response.IsSuccessStatusCode)
-                //{
-                //    var errorContent = await response.Content.ReadAsStringAsync();
-                //    _logger.LogError("Classification failed. Status code: {StatusCode}, Body: {Body}", response.StatusCode, errorContent);
-                //    throw new Exception($"Classification failed. Status code: {response.StatusCode}");
-                //}
+                var response = await _httpClient.PostAsync(endpoint, content);
 
-                //var jsonString = await response.Content.ReadAsStringAsync();
-                /////////////////////////////////////
-                //var result = JsonConvert.DeserializeObject<ClassificationResult>(jsonString);
-                //if (result == null)
-                //{
-                //    _logger.LogError("Deserialized result is null. JSON: {Json}", jsonString);
-                //    return null;
-                //    throw new Exception("Classification response could not be parsed.");
-                //}
-                string mockJson = @" 
-                                {
-                                  ""prediction"": 1,
-                                  ""probability"": 0.99,
-                                  ""class"": ""phishing/spam"",
-                                  ""confidence_level"": ""VERY_HIGH"",
-                                  ""details"": {
-                                    ""processed_text"": ""immediate action required account locked click verify"",
-                                    ""token_sequence"": [201, 405, 502, 304, 607, 102],
-                                    ""flags"": {
-                                      ""urgent_keywords"": [""immediate"", ""required"", ""locked""],
-                                      ""suspicious_urls"": [""http://paypal-secure.com/login""],
-                                      ""header_anomalies"": [""SPF_FAIL"", ""DOMAIN_MISMATCH""]
-                                    }
-                                  }
-                                }";
+                if (!response.IsSuccessStatusCode)
+                {
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    _logger.LogError("Classification failed. Status code: {StatusCode}, Body: {Body}", response.StatusCode, errorContent);
+                    throw new Exception($"Classification failed. Status code: {response.StatusCode}");
+                }
+
+                var jsonString = await response.Content.ReadAsStringAsync();
+                //var jsonString = @"
+                //                {
+                //                    ""text"": ""Hi, how are you today?"",
+                //                    ""classification"": [
+                //                        {
+                //                            ""label"": ""Safe Email"",
+                //                            ""score"": 0.9925717711448669
+                //                        }
+                //                    ]
+                //                }";
 
 
-                return mockJson;
+                return jsonString;
             }
             catch (Exception ex)
             {

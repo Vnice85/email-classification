@@ -31,76 +31,76 @@ namespace EmailClassification.Infrastructure.Implement
             _httpClient = httpClient;
             _logger = logger;
         }
-        public async Task<AuthResponseDTO?> LoginResponse(AuthInfoDTO authInfo)
-        {
-            if (authInfo == null
-                || string.IsNullOrEmpty(authInfo.Email)
-                || string.IsNullOrEmpty(authInfo.Name)
-                || string.IsNullOrEmpty(authInfo.ProviderId))
+            public async Task<AuthResponseDTO?> LoginResponse(AuthInfoDTO authInfo)
             {
-                return null;
-            }
-
-            var user = await _unitOfWork.AppUser.GetItemWhere(u => u.UserId == authInfo.Email);
-            await _unitOfWork.BeginTransactionASync();
-            try
-            {
-                if (user == null)
+                if (authInfo == null
+                    || string.IsNullOrEmpty(authInfo.Email)
+                    || string.IsNullOrEmpty(authInfo.Name)
+                    || string.IsNullOrEmpty(authInfo.ProviderId))
                 {
-                    var userItem = new AppUser()
+                    return null;
+                }
+
+                var user = await _unitOfWork.AppUser.GetItemWhere(u => u.UserId == authInfo.Email);
+                await _unitOfWork.BeginTransactionASync();
+                try
+                {
+                    if (user == null)
+                    {
+                        var userItem = new AppUser()
+                        {
+                            UserId = authInfo.Email,
+                            UserName = authInfo.Name,
+                            ProfileImage = authInfo.ProfileImage
+                        };
+                        await _unitOfWork.AppUser.AddAsync(userItem);
+                        await _unitOfWork.SaveAsync();
+                    }
+                    var jwtAccessToken = GenerateJwtToken(authInfo.Email, authInfo.Name, authInfo.ProviderId);
+                    var tokenItem = await _unitOfWork.Token.GetItemWhere(u => u.UserId == authInfo.Email && u.Provider == "GOOGLE");
+                    if (tokenItem == null)
+                    {
+                        var token = new Token()
+                        {
+                            Provider = "GOOGLE",
+                            AccessToken = AesHelper.Encrypt(authInfo.GoogleAccessToken ?? "", _configuration["Aes:Key"] ?? ""),
+                            RefreshToken = AesHelper.Encrypt(authInfo.GoogleRefreshToken ?? "", _configuration["Aes:Key"] ?? ""),
+                            ExpiresAt = DateTime.UtcNow.AddMinutes(60),
+                            UserId = authInfo.Email,
+                        };
+                        await _unitOfWork.Token.AddAsync(token);
+                    }
+                    else
+                    {
+                        if (!string.IsNullOrEmpty(authInfo.GoogleRefreshToken))
+                        {
+                            tokenItem.RefreshToken = AesHelper.Encrypt(authInfo.GoogleRefreshToken ?? "", _configuration["Aes:Key"] ?? "");
+                        }
+                        tokenItem.AccessToken = AesHelper.Encrypt(authInfo.GoogleAccessToken ?? "", _configuration["Aes:Key"] ?? "");
+                        tokenItem.ExpiresAt = DateTime.UtcNow.AddMinutes(60);
+                        _unitOfWork.Token.Update(tokenItem);
+                    }
+                    await _unitOfWork.SaveAsync();
+                    await _unitOfWork.CommitTransactionAsync();
+                    if (DateTime.TryParse(authInfo.ExpiresAt, out var tmp))
+                    {
+                        authInfo.ExpiresAt = tmp.ToUniversalTime().AddHours(7).ToString("yyyy-MM-dd HH:mm:ss");
+                    }
+
+                    return new AuthResponseDTO
                     {
                         UserId = authInfo.Email,
                         UserName = authInfo.Name,
-                        ProfileImage = authInfo.ProfileImage
+                        JwtAccessToken = jwtAccessToken,
+                        ProfileImage = authInfo.ProfileImage,
+                        ExpiresAt = authInfo.ExpiresAt
                     };
-                    await _unitOfWork.AppUser.AddAsync(userItem);
-                    await _unitOfWork.SaveAsync();
                 }
-                var jwtAccessToken = GenerateJwtToken(authInfo.Email, authInfo.Name, authInfo.ProviderId);
-                var tokenItem = await _unitOfWork.Token.GetItemWhere(u => u.UserId == authInfo.Email && u.Provider == "GOOGLE");
-                if (tokenItem == null)
+                catch(Exception ex)
                 {
-                    var token = new Token()
-                    {
-                        Provider = "GOOGLE",
-                        AccessToken = AesHelper.Encrypt(authInfo.GoogleAccessToken ?? "", _configuration["Aes:Key"] ?? ""),
-                        RefreshToken = AesHelper.Encrypt(authInfo.GoogleRefreshToken ?? "", _configuration["Aes:Key"] ?? ""),
-                        ExpiresAt = DateTime.UtcNow.AddHours(8),
-                        UserId = authInfo.Email,
-                    };
-                    await _unitOfWork.Token.AddAsync(token);
+                    _logger.LogError("Error occurred while processing login response for user {ex}", ex);
+                    throw;
                 }
-                else
-                {
-                    if (!string.IsNullOrEmpty(authInfo.GoogleRefreshToken))
-                    {
-                        tokenItem.RefreshToken = AesHelper.Encrypt(authInfo.GoogleRefreshToken ?? "", _configuration["Aes:Key"] ?? "");
-                    }
-                    tokenItem.AccessToken = AesHelper.Encrypt(authInfo.GoogleAccessToken ?? "", _configuration["Aes:Key"] ?? "");
-                    tokenItem.ExpiresAt = DateTime.UtcNow.AddMinutes(60);
-                    _unitOfWork.Token.Update(tokenItem);
-                }
-                await _unitOfWork.SaveAsync();
-                await _unitOfWork.CommitTransactionAsync();
-                if (DateTime.TryParse(authInfo.ExpiresAt, out var tmp))
-                {
-                    authInfo.ExpiresAt = tmp.ToLocalTime().ToString("yyyy-MM-dd HH:mm:ss");
-                }
-
-                return new AuthResponseDTO
-                {
-                    UserId = authInfo.Email,
-                    UserName = authInfo.Name,
-                    JwtAccessToken = jwtAccessToken,
-                    ProfileImage = authInfo.ProfileImage,
-                    ExpiresAt = authInfo.ExpiresAt
-                };
-            }
-            catch(Exception ex)
-            {
-                _logger.LogError("Error occurred while processing login response for user {ex}", ex);
-                throw;
-            }
 
         }
        

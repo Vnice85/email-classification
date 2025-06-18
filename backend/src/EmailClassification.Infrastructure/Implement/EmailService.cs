@@ -184,21 +184,21 @@ public class EmailService : IEmailService
         if (email.Body == string.Empty)
             email.Body = " ";
 
-        var emailContent = new EmailContent
-        {
-            From = userId,
-            To = email.ToAddress ?? "",
-            Subject = email.Subject ?? "",
-            Body = email.Body ?? "",
-            Date = DateTimeOffset.UtcNow.ToOffset(TimeSpan.FromHours(7))
-        };
+        //var emailContent = new EmailContent
+        //{
+        //    From = userId,
+        //    To = email.ToAddress ?? "",
+        //    Subject = email.Subject ?? "",
+        //    Body = email.Body ?? "",
+        //    Date = DateTimeOffset.UtcNow.ToOffset(TimeSpan.FromHours(7))
+        //};
         var label = "UNDEFINE";
-        var jsonString = await _classificationService.IdentifyLabel(emailContent);
+        var jsonString = await _classificationService.IdentifyLabel(email.Body ?? " ");
         if (jsonString != null)
         {
             var classificationResult = JsonConvert.DeserializeObject<ClassificationResult>(jsonString);
             if (classificationResult != null)
-                label = classificationResult?.Probability >= 0.5 ? "SPAM" : "NORMAL";
+                label = classificationResult?.Details.score <= 0.5 ? "SPAM" : "NORMAL";
         }
         await _unitOfWork.BeginTransactionASync();
         try
@@ -266,13 +266,13 @@ public class EmailService : IEmailService
             Body = email.Body ?? "",
             Date = DateTimeOffset.UtcNow.ToOffset(TimeSpan.FromHours(7))
         };
-        var jsonString = await _classificationService.IdentifyLabel(emailContent);
+        var jsonString = await _classificationService.IdentifyLabel(email.Body ?? " ");
         var label = "UNDEFINE";
         if (jsonString != null)
         {
             var classificationResult = JsonConvert.DeserializeObject<ClassificationResult>(jsonString);
             if (classificationResult != null)
-                label = classificationResult?.Probability >= 0.5 ? "SPAM" : "NORMAL";
+                label = classificationResult?.Details.score <= 0.5 ? "SPAM" : "NORMAL";
         }
         await _unitOfWork.BeginTransactionASync();
         try
@@ -570,22 +570,24 @@ public class EmailService : IEmailService
             emails.AddRange(await query.ToListAsync());
             var tasks = emails.Select(async item =>
             {
-                var emailContent = new EmailContent
-                {
-                    From = userId,
-                    To = item.ToAddress ?? "",
-                    Subject = item.Subject ?? "",
-                    Body = item.Body ?? "",
-                    Date = new DateTimeOffset(item.SentDate ?? item.ReceivedDate ?? DateTime.UtcNow, TimeSpan.FromHours(7))
-
-                };
-                var jsonString = await _classificationService.IdentifyLabel(emailContent);
+                //var emailContent = new EmailContent
+                //{
+                //    From = userId,
+                //    To = item.ToAddress ?? "",
+                //    Subject = item.Subject ?? "",
+                //    Body = item.Body ?? "",
+                //    Date = new DateTimeOffset(
+                //        DateTime.SpecifyKind(item.SentDate ?? item.ReceivedDate ?? DateTime.UtcNow, DateTimeKind.Unspecified), 
+                //        TimeSpan.FromHours(7)
+                //        )
+                //};
+                var jsonString = await _classificationService.IdentifyLabel(item.Body ?? " ");
                 var labelName = "UNDEFINE";
                 if (jsonString != null)
                 {
                     var classificationResult = JsonConvert.DeserializeObject<ClassificationResult>(jsonString);
                     if (classificationResult != null)
-                        labelName = classificationResult?.Probability >= 0.5 ? "SPAM" : "NORMAL";
+                        labelName = classificationResult?.Details.score >= 0.5 ? "SPAM" : "NORMAL";
                 }
                 var labelItem = labels.FirstOrDefault(l => l.LabelName == labelName);
                 if (labelItem == null)

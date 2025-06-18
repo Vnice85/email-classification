@@ -79,7 +79,7 @@ namespace EmailClassification.API.Controllers
         }
 
         [Authorize]
-        [HttpGet("RefreshToken")]
+        [HttpPost("RefreshToken")]
         public async Task<IActionResult> RefreshToken()
         {
             var userId = User.FindFirst(ClaimTypes.Email)?.Value;

@@ -52,21 +52,21 @@ namespace EmailClassification.Application.Services
         {
             if (guestId == null)
                 throw new Exception("Required guest id in header");
-            var emailContent = new EmailContent
-            {
-                From = email.From ?? " ",
-                To = email.To ?? " ",
-                Subject = email.Subject ?? " ",
-                Body = email.Body ?? " ",
-                Date = DateTimeOffset.UtcNow.ToOffset(TimeSpan.FromHours(7))
-            };
-            var jsonString = await _classificationService.IdentifyLabel(emailContent);
+            //var emailContent = new EmailContent
+            //{
+            //    From = email.From ?? " ",
+            //    To = email.To ?? " ",
+            //    Subject = email.Subject ?? " ",
+            //    Body = email.Body ?? " ",
+            //    Date = DateTimeOffset.UtcNow.ToOffset(TimeSpan.FromHours(7))
+            //};
+            var jsonString = await _classificationService.IdentifyLabel(email.Body ?? " ");
             var label = "UNDEFINE";
             if(jsonString != null)
             {
                 var classificationResult = JsonConvert.DeserializeObject<ClassificationResult>(jsonString);
                 if (classificationResult != null)
-                    label = classificationResult?.Probability >= 0.5 ? "SPAM" : "NORMAL";
+                    label = classificationResult?.Details.score <= 0.5 ? "SPAM" : "NORMAL";
             }
             await _unitOfWork.BeginTransactionASync();
             try
@@ -149,21 +149,21 @@ namespace EmailClassification.Application.Services
         {
             if (email.Body == string.Empty)
                 email.Body = " ";
-            var emailContent = new EmailContent
-            {
-                From = email.From ?? " ",
-                To = email.To ?? " ",
-                Subject = email.Subject ?? " ",
-                Body = email.Body ?? "",
-                Date = DateTimeOffset.UtcNow.ToOffset(TimeSpan.FromHours(7))
-            };
-            var jsonString = await _classificationService.IdentifyLabel(emailContent);
+            //var emailContent = new EmailContent
+            //{
+            //    From = email.From ?? " ",
+            //    To = email.To ?? " ",
+            //    Subject = email.Subject ?? " ",
+            //    Body = email.Body ?? "",
+            //    Date = DateTimeOffset.UtcNow.ToOffset(TimeSpan.FromHours(7))
+            //};
+            var jsonString = await _classificationService.IdentifyLabel(email.Body ?? " ");
             var label = "UNDEFINE";
             if(jsonString != null)
             {
                 var classificationResult = JsonConvert.DeserializeObject<ClassificationResult>(jsonString);
                 if (classificationResult != null)
-                    label = classificationResult?.Probability >= 0.5 ? "SPAM" : "NORMAL";
+                    label = classificationResult?.Details.score <= 0.5 ? "SPAM" : "NORMAL";
 
             }
             await _unitOfWork.BeginTransactionASync();
@@ -250,12 +250,16 @@ namespace EmailClassification.Application.Services
 
         public async Task<List<GuestEmailHeaderDTO>> GetGuestEmailsAsync(GuestFilter filter)
         {
-            var label = await _unitOfWork.EmailLabel.GetItemWhere(l => l.LabelName == filter.LabelName);
             var query = _unitOfWork.Email.AsQueryable(ls => ls.UserId == guestId && ls.DirectionId == (int)DirectionStatus.DRAFT);
 
-            if (label != null)
+            if (!string.IsNullOrEmpty(filter.LabelName))
             {
-                query = query.Where(ls => ls.Label!.LabelName == label.LabelName);
+                var label = await _unitOfWork.EmailLabel.GetItemWhere(l => l.LabelName == filter.LabelName);
+                if (label != null)
+                {
+                    query = query.Where(ls => ls.Label!.LabelName == label.LabelName);
+                }
+
             }
             var emails = await query
                 .OrderByDescending(ls => ls.SentDate)

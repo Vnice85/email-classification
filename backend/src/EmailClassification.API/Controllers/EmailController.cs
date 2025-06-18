@@ -101,7 +101,7 @@ public class EmailController : BaseController
     }
 
 
-    [HttpGet("Sync")]
+    [HttpPost("Sync")]
     public async Task SyncEmails()
     {
         var userId = User.FindFirst(ClaimTypes.Email)?.Value;
@@ -122,7 +122,7 @@ public class EmailController : BaseController
         }
     }
 
-    [HttpGet("Classify")]
+    [HttpPost("Classify")]
     public void ClassifyEmail()
     {
         var userId = User.FindFirst(ClaimTypes.Email)?.Value;

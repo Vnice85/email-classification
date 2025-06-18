@@ -10,6 +10,6 @@ namespace EmailClassification.Application.Interfaces.IServices
 {
     public interface IClassificationService
     {
-        Task<string?> IdentifyLabel(EmailContent emailContent);
+        Task<string?> IdentifyLabel(string emailContent);
     }
 }

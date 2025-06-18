@@ -40,6 +40,7 @@ CREATE TABLE email (
     history_id VARCHAR(255),
     snippet VARCHAR(255),
     plain_text TEXT,
+    prediction_result JSONB,
     CONSTRAINT FK_email_direction FOREIGN KEY(direction_id) REFERENCES email_direction(direction_id) ON DELETE CASCADE,
     CONSTRAINT FK_email_label FOREIGN KEY(label_id) REFERENCES email_label(label_id),
     CONSTRAINT FK_email_user FOREIGN KEY(user_id) REFERENCES app_user(user_id)
