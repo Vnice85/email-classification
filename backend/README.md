@@ -65,6 +65,8 @@ JWT_KEY=
 JWT_EXPIRY_MINUTES=
 ## Aes Encrypt
 AES_KEY=
+## AI API
+CLASSIFICATION_API_ENDPOINT=
 
 # ElasticSearch
 ELASTICSEARCH_HOST=http://elastic:9200
@@ -113,7 +115,7 @@ Here :>>>
 **Authentication APIs**
 
 - `GET /auth/login` - Login with Google OAuth (popup-based)
-- `GET /auth/refreshtoken` - Refresh JWT and Google access tokens
+- `POST /auth/refreshtoken` - Refresh JWT and Google access tokens
 
 **Email APIs** (For authenticated users - requires JWT Bearer token)
 
@@ -124,8 +126,8 @@ Here :>>>
 - `DELETE /email/messages/{id}` - Delete specific email
 - `POST /email/drafts/save` - Create draft email (stored internally, not in Gmail)
 - `PUT /email/drafts/{id}` - Update draft email content
-- `GET /email/sync` - Trigger background email synchronization for current user
-- `GET /email/classify` - Trigger ML classification for unlabeled emails
+- `POST /email/sync` - Trigger background email synchronization for current user
+- `POST /email/classify` - Trigger ML classification for unlabeled emails
 
 ## Support
 
