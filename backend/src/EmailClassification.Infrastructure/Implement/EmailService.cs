@@ -18,6 +18,10 @@ using System.Text.RegularExpressions;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using EmailClassification.Application.DTOs.Classification;
+using NetTopologySuite.Index.HPRtree;
+using Microsoft.AspNetCore.SignalR;
+using EmailClassification.Application.Interfaces.INotification;
+using static EmailClassification.Application.DTOs.Classification.ClassificationResult;
 
 
 namespace EmailClassification.Infrastructure.Implement;
@@ -30,6 +34,7 @@ public class EmailService : IEmailService
     private readonly IClassificationService _classificationService;
     private readonly IEmailSearchService _emailSearchService;
     private readonly IConfiguration _configuration;
+    private readonly INotificationSender _notificationSender;
     private readonly ILogger<EmailService> _logger;
 
     public EmailService(IUnitOfWork unitOfWork,
@@ -38,7 +43,8 @@ public class EmailService : IEmailService
         IClassificationService classificationService,
         IEmailSearchService emailSearchService,
         IConfiguration configuration,
-        ILogger<EmailService> logger)
+        ILogger<EmailService> logger,
+        INotificationSender notificationSender)
     {
         _unitOfWork = unitOfWork;
         _httpContextAccessor = httpContextAccessor;
@@ -46,6 +52,7 @@ public class EmailService : IEmailService
         _classificationService = classificationService;
         _emailSearchService = emailSearchService;
         _configuration = configuration;
+        _notificationSender = notificationSender;
         _logger = logger;
     }
 
@@ -81,7 +88,7 @@ public class EmailService : IEmailService
             throw new Exception("Sync email failed");
         }
 
-        BackgroundJob.Enqueue<IEmailService>(e => e.ClassifyAllEmails(userId));
+        BackgroundJob.Enqueue<IEmailService>(e => e.ClassifyAllEmailsByBatch(userId));
         return (int)messageResponse.StatusCode;
     }
 
@@ -134,7 +141,7 @@ public class EmailService : IEmailService
                     .ToListAsync();
             }
 
-            BackgroundJob.Enqueue<IEmailService>(e => e.ClassifyAllEmails(userId));
+            BackgroundJob.Enqueue<IEmailService>(e => e.ClassifyAllEmailsByBatch(userId));
         }
 
         var emailHeaderDtos = emails.Select(email => new EmailHeaderDTO
@@ -198,7 +205,7 @@ public class EmailService : IEmailService
         {
             var classificationResult = JsonConvert.DeserializeObject<ClassificationResult>(jsonString);
             if (classificationResult != null)
-                label = classificationResult?.Details.score <= 0.5 ? "SPAM" : "NORMAL";
+                label = classificationResult?.Classification[0].label == "Phishing Email" ? "SPAM/PHISHING" : "NORMAL";
         }
         await _unitOfWork.BeginTransactionASync();
         try
@@ -272,7 +279,7 @@ public class EmailService : IEmailService
         {
             var classificationResult = JsonConvert.DeserializeObject<ClassificationResult>(jsonString);
             if (classificationResult != null)
-                label = classificationResult?.Details.score <= 0.5 ? "SPAM" : "NORMAL";
+                label = classificationResult?.Classification[0].label == "Phishing Email" ? "SPAM/PHISHING" : "NORMAL";
         }
         await _unitOfWork.BeginTransactionASync();
         try
@@ -547,7 +554,7 @@ public class EmailService : IEmailService
         }
     }
 
-
+    [DisableConcurrentExecution(timeoutInSeconds: 3600)]
     public async Task ClassifyAllEmails(string userId)
     {
         var semaphore = new SemaphoreSlim(1, 1);
@@ -556,49 +563,94 @@ public class EmailService : IEmailService
         {
             emails.Clear();
             var labels = await _unitOfWork.EmailLabel.AsQueryable().AsNoTracking().ToListAsync();
-            var query = _unitOfWork.Email.AsQueryable(e => e.LabelId == null && e.UserId == userId).Take(100)
-                .Select(e => new Email
-                {
-                    EmailId = e.EmailId,
-                    Body = e.Body,
-                    Subject = e.Subject,
-                    FromAddress = e.FromAddress,
-                    ToAddress = e.ToAddress,
-                    ReceivedDate = e.ReceivedDate,
-                    SentDate = e.SentDate
-                });
+            var undifineId = labels.FirstOrDefault(l => l.LabelName == "UNDEFINE")?.LabelId;
+            var query = _unitOfWork.Email.AsQueryable(e => (e.LabelId == null || e.LabelId == undifineId) && e.UserId == userId).OrderByDescending(e => e.HistoryId).Take(100)
+                    .Select(e => new Email
+                    {
+                        EmailId = e.EmailId,
+                        Body = e.Body,
+                        Subject = e.Subject,
+                        FromAddress = e.FromAddress,
+                        ToAddress = e.ToAddress,
+                        ReceivedDate = e.ReceivedDate,
+                        SentDate = e.SentDate,
+                        // 
+                        DirectionId = e.DirectionId,
+                        HistoryId = e.HistoryId,
+                        Snippet = e.Snippet,
+                        PlainText = e.PlainText,
+                        UserId = e.UserId
+                    });
             emails.AddRange(await query.ToListAsync());
-            var tasks = emails.Select(async item =>
+            //var tasks = emails.Select(async item =>
+            //{
+            //    //var emailContent = new EmailContent
+            //    //{
+            //    //    From = userId,
+            //    //    To = item.ToAddress ?? "",
+            //    //    Subject = item.Subject ?? "",
+            //    //    Body = item.Body ?? "",
+            //    //    Date = new DateTimeOffset(
+            //    //        DateTime.SpecifyKind(item.SentDate ?? item.ReceivedDate ?? DateTime.UtcNow, DateTimeKind.Unspecified), 
+            //    //        TimeSpan.FromHours(7)
+            //    //        )
+            //    //};
+            //    var jsonString = await _classificationService.IdentifyLabel(item.PlainText ?? " ");
+            //    var label = "UNDEFINE";
+            //    if (jsonString != null)
+            //    {
+            //        var classificationResult = JsonConvert.DeserializeObject<ClassificationResult>(jsonString);
+            //        if (classificationResult != null)
+            //            label = classificationResult?.Classification[0].label == "Phishing Email" ? "SPAM/PHISHING" : "NORMAL";
+            //    }
+            //    var labelItem = labels.FirstOrDefault(l => l.LabelName == label);
+            //    if (labelItem == null)
+            //    {
+            //        await semaphore.WaitAsync();
+            //        try
+            //        {
+            //            labelItem = labels.FirstOrDefault(l => l.LabelName == label);
+            //            if (labelItem == null)
+            //            {
+            //                labelItem = new EmailLabel { LabelName = label };
+            //                await _unitOfWork.EmailLabel.AddAsync(labelItem);
+            //                await _unitOfWork.SaveAsync();
+            //                labels.Add(labelItem);
+            //            }
+            //        }
+            //        finally
+            //        {
+            //            semaphore.Release();
+            //        }
+            //    }
+
+            //    item.LabelId = labelItem.LabelId;
+            //    item.PredictionResult = jsonString;
+            //});
+            //await Task.WhenAll(tasks);
+            foreach (var item in emails)
             {
-                //var emailContent = new EmailContent
-                //{
-                //    From = userId,
-                //    To = item.ToAddress ?? "",
-                //    Subject = item.Subject ?? "",
-                //    Body = item.Body ?? "",
-                //    Date = new DateTimeOffset(
-                //        DateTime.SpecifyKind(item.SentDate ?? item.ReceivedDate ?? DateTime.UtcNow, DateTimeKind.Unspecified), 
-                //        TimeSpan.FromHours(7)
-                //        )
-                //};
-                var jsonString = await _classificationService.IdentifyLabel(item.Body ?? " ");
-                var labelName = "UNDEFINE";
+                var jsonString = await _classificationService.IdentifyLabel(item.PlainText ?? "N/A");
+                var label = "UNDEFINE";
+
                 if (jsonString != null)
                 {
                     var classificationResult = JsonConvert.DeserializeObject<ClassificationResult>(jsonString);
                     if (classificationResult != null)
-                        labelName = classificationResult?.Details.score >= 0.5 ? "SPAM" : "NORMAL";
+                        label = classificationResult.Classification[0].label == "Phishing Email" ? "SPAM/PHISHING" : "NORMAL";
                 }
-                var labelItem = labels.FirstOrDefault(l => l.LabelName == labelName);
+
+                var labelItem = labels.FirstOrDefault(l => l.LabelName == label);
+
                 if (labelItem == null)
                 {
                     await semaphore.WaitAsync();
                     try
                     {
-                        labelItem = labels.FirstOrDefault(l => l.LabelName == labelName);
+                        labelItem = labels.FirstOrDefault(l => l.LabelName == label);
                         if (labelItem == null)
                         {
-                            labelItem = new EmailLabel { LabelName = labelName };
+                            labelItem = new EmailLabel { LabelName = label };
                             await _unitOfWork.EmailLabel.AddAsync(labelItem);
                             await _unitOfWork.SaveAsync();
                             labels.Add(labelItem);
@@ -609,25 +661,145 @@ public class EmailService : IEmailService
                         semaphore.Release();
                     }
                 }
-
                 item.LabelId = labelItem.LabelId;
                 item.PredictionResult = jsonString;
-            });
-            await Task.WhenAll(tasks);
+                try
+                {
+                    _unitOfWork.Email.Update(item);
+                    await _unitOfWork.SaveAsync();
+                    await _notificationSender.NotifyNewLabelAsync(
+                    userId,
+                        item.EmailId,
+                        labels.First(l => l.LabelId == item.LabelId).LabelName);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError("Have problem when update email with id={EmailId}: {Message}", item.EmailId, ex.Message);
+                }
+            }
+
+            //try
+            //{
+            //    await _unitOfWork.BulkUpdateAsync(emails, new BulkConfig
+            //    {
+            //        PropertiesToInclude = new List<string> { nameof(Email.EmailId), nameof(Email.LabelId), nameof(Email.PredictionResult) },
+            //    });
+            //}
+            //catch (Exception ex)
+            //{
+            //    _logger.LogError("Error updating labels for user {UserId}: {Message}", userId, ex);
+            //    throw;
+            //}
+        } while (emails.Any());
+    }
+
+    [DisableConcurrentExecution(timeoutInSeconds: 3600)]
+    public async Task ClassifyAllEmailsByBatch(string userId)
+    {
+        var semaphore = new SemaphoreSlim(1, 1);
+        var emails = new List<Email>();
+
+        do
+        {
+            emails.Clear();
+            var labels = await _unitOfWork.EmailLabel.AsQueryable().AsNoTracking().ToListAsync();
+            var undefineId = labels.FirstOrDefault(l => l.LabelName == "UNDEFINE")?.LabelId;
+
+            var query = _unitOfWork.Email.AsQueryable(e =>
+                (e.LabelId == null || e.LabelId == undefineId) && e.UserId == userId)
+                .OrderByDescending(e => e.HistoryId)
+                .Take(5)
+                .Select(e => new Email
+                {
+                    EmailId = e.EmailId,
+                    Body = e.Body,
+                    Subject = e.Subject,
+                    FromAddress = e.FromAddress,
+                    ToAddress = e.ToAddress,
+                    ReceivedDate = e.ReceivedDate,
+                    SentDate = e.SentDate,
+                    DirectionId = e.DirectionId,
+                    HistoryId = e.HistoryId,
+                    Snippet = e.Snippet,
+                    PlainText = e.PlainText,
+                    UserId = e.UserId
+                });
+
+            emails.AddRange(await query.ToListAsync());
+
+            if (!emails.Any()) break;
+
+            var texts = emails.Select(e => e.PlainText ?? "N/A").ToList();
+            var batchResult = await _classificationService.IdentifyLabelBatch(texts);
+
+            if (batchResult == null || !batchResult?.Any() == true || batchResult.Count != emails.Count)
+            {
+                _logger.LogWarning("Batch classify result mismatch with emails count.");
+                return;
+            }
+
+            // Tạo transaction để batch update
+            await _unitOfWork.BeginTransactionASync();
+
             try
             {
-                await _unitOfWork.BulkUpdateAsync(emails, new BulkConfig
+                for (int i = 0; i < emails.Count; i++)
                 {
-                    PropertiesToInclude = new List<string> { nameof(Email.EmailId), nameof(Email.LabelId), nameof(Email.PredictionResult) },
-                });
+                    var email = emails[i];
+                    var result = batchResult[i];
+
+                    var label = "UNDEFINE";
+                    if (result.Classification?.Any() == true)
+                    {
+                        var labelRaw = result.Classification[0].label;
+                        label = labelRaw == "Phishing Email" ? "SPAM/PHISHING" : "NORMAL";
+                    }
+
+                    var labelItem = labels.FirstOrDefault(l => l.LabelName == label);
+
+                    if (labelItem == null)
+                    {
+                        await semaphore.WaitAsync();
+                        try
+                        {
+                            labelItem = new EmailLabel { LabelName = label };
+                            await _unitOfWork.EmailLabel.AddAsync(labelItem);
+                            await _unitOfWork.SaveAsync();
+                            labels.Add(labelItem);
+                        }
+                        finally
+                        {
+                            semaphore.Release();
+                        }
+                    }
+
+                    email.LabelId = labelItem.LabelId;
+                    email.PredictionResult = JsonConvert.SerializeObject(result);
+                    _unitOfWork.Email.Update(email);
+                }
+
+                await _unitOfWork.SaveAsync();
+                await _unitOfWork.CommitTransactionAsync();
+
+                foreach (var email in emails)
+                {
+                    await _notificationSender.NotifyNewLabelAsync(
+                        userId,
+                        email.EmailId,
+                        labels.First(l => l.LabelId == email.LabelId).LabelName);
+                }
             }
             catch (Exception ex)
             {
-                _logger.LogError("Error updating labels for user {UserId}: {Message}", userId, ex);
+                await _unitOfWork.RollbackTransactionAsync();
+                _logger.LogError("Error in batch classification: {Message}", ex.Message);
                 throw;
             }
+
         } while (emails.Any());
     }
+
+
 
     public string GetUserEmail()
     {
@@ -758,7 +930,15 @@ public class EmailService : IEmailService
             emailInfo.Body = !string.IsNullOrEmpty(bodyData)
                              ? DEMail.DecodeBase64(bodyData)
                              : null;
-            emailInfo.PlainText = HtmlHelper.StripHtmlTags(emailInfo.Body == null ? "" : emailInfo.Body);
+            emailInfo.PlainText = HtmlHelper.StripHtmlTags(emailInfo.Body ?? "");
+        }
+        else if (payload["mimeType"]?.ToString() == "text/plain")
+        {
+            var bodyData = payload["body"]?["data"]?.ToString();
+            emailInfo.PlainText = !string.IsNullOrEmpty(bodyData)
+                                 ? DEMail.DecodeBase64(bodyData)
+                                 : null;
+            emailInfo.Body = emailInfo.PlainText;
         }
         else
         {
@@ -769,11 +949,21 @@ public class EmailService : IEmailService
                 {
                     var partObj = part as JObject;
                     var partData = partObj?["body"]?["data"]?.ToString();
-                    if (partObj?["mimeType"]?.ToString() == "text/html" && !string.IsNullOrEmpty(partData))
+                    var mimeType = partObj?["mimeType"]?.ToString();
+
+                    if (mimeType == "text/html" && !string.IsNullOrEmpty(partData))
                     {
                         emailInfo.Body = DEMail.DecodeBase64(partData);
-                        emailInfo.PlainText = HtmlHelper.StripHtmlTags(emailInfo.Body == null ? "" : emailInfo.Body);
+                        emailInfo.PlainText = HtmlHelper.StripHtmlTags(emailInfo.Body ?? "");
                         break;
+                    }
+                    else if (mimeType == "text/plain" && !string.IsNullOrEmpty(partData) && string.IsNullOrEmpty(emailInfo.PlainText))
+                    {
+                        emailInfo.PlainText = DEMail.DecodeBase64(partData);
+                        if (string.IsNullOrEmpty(emailInfo.Body))
+                        {
+                            emailInfo.Body = emailInfo.PlainText;
+                        }
                     }
                 }
             }

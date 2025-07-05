@@ -39,6 +39,9 @@ services:
 
       # AES Encryption
       - Aes__Key=${AES_KEY}
+
+      # AI API
+      - ClassificationApi__Endpoint=${CLASSIFICATION_API_ENDPOINT}
     networks:
       - emailcf
 

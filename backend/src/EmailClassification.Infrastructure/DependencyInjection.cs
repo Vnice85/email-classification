@@ -58,13 +58,12 @@ namespace EmailClassification.Infrastructure
             });
             services.AddHangfireServer();
             services.AddHostedService<BackgroundJobInitializer>();
-            services.AddCors(options =>
-            {
-                options.AddPolicy("AllowAll", policy =>
-                {
-                    policy.AllowAnyOrigin()
+            services.AddCors(options => {
+                options.AddPolicy("AllowAll", policy => {
+                    policy.WithOrigins("http://localhost:3000")
                           .AllowAnyHeader()
-                          .AllowAnyMethod();
+                          .AllowAnyMethod()
+                          .AllowCredentials();
                 });
             });
 

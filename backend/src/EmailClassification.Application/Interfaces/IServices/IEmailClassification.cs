@@ -11,5 +11,6 @@ namespace EmailClassification.Application.Interfaces.IServices
     public interface IClassificationService
     {
         Task<string?> IdentifyLabel(string emailContent);
+        Task<List<ClassificationResult>?> IdentifyLabelBatch(List<string> emailContent);
     }
 }

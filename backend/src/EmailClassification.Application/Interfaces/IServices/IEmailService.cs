@@ -20,6 +20,7 @@ namespace EmailClassification.Application.Interfaces.IServices
 
         Task<int> SyncEmailsFromGmail(string userId, string directionName, bool syncAllEmails);
         Task ClassifyAllEmails(string userId);
+        Task ClassifyAllEmailsByBatch(string userId);
 
         // helper method for sync option
         Task<bool> ExistHistoryId(string userId);

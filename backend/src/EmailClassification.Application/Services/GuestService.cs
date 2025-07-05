@@ -66,8 +66,8 @@ namespace EmailClassification.Application.Services
             {
                 var classificationResult = JsonConvert.DeserializeObject<ClassificationResult>(jsonString);
                 if (classificationResult != null)
-                    label = classificationResult?.Details.score <= 0.5 ? "SPAM" : "NORMAL";
-            }
+                    label = classificationResult?.Classification[0].label == "Phishing Email"  ? "SPAM/PHISHING" : "NORMAL";
+            }   
             await _unitOfWork.BeginTransactionASync();
             try
             {
@@ -163,9 +163,8 @@ namespace EmailClassification.Application.Services
             {
                 var classificationResult = JsonConvert.DeserializeObject<ClassificationResult>(jsonString);
                 if (classificationResult != null)
-                    label = classificationResult?.Details.score <= 0.5 ? "SPAM" : "NORMAL";
-
-            }
+                    label = classificationResult?.Classification[0].label == "Phishing Email" ? "SPAM/PHISHING" : "NORMAL";
+            }   
             await _unitOfWork.BeginTransactionASync();
             try
             {

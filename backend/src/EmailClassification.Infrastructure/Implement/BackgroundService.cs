@@ -106,7 +106,7 @@ namespace EmailClassification.Infrastructure.Implement
             }
             foreach (var id in userIds)
             {
-                BackgroundJob.Enqueue<IEmailService>(s => s.ClassifyAllEmails(id));
+                BackgroundJob.Enqueue<IEmailService>(s => s.ClassifyAllEmailsByBatch(id));
             }
         }
 

@@ -11,7 +11,7 @@ namespace EmailClassification.Application.DTOs.Classification
     {
         //public int Prediction { get; set; }
         public string? Text { get; set; }
-        public Detail Details { get; set; } = new Detail();
+        public List<Detail> Classification { get; set; } = new List<Detail>();
 
         public class Detail
         {
@@ -43,6 +43,12 @@ namespace EmailClassification.Application.DTOs.Classification
         //    public List<string> SuspiciousUrls { get; set; } = new List<string>();
 
         //}
+    }
+
+    public class ClassificationResponse
+    {
+        [JsonProperty("results")]
+        public List<ClassificationResult>? Results { get; set; }
     }
 
 }

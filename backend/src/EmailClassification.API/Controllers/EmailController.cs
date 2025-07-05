@@ -5,6 +5,7 @@ using Hangfire;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using System.Security.Claims;
+using System.Threading.Tasks;
 
 namespace EmailClassification.API.Controllers;
 
@@ -128,7 +129,10 @@ public class EmailController : BaseController
         var userId = User.FindFirst(ClaimTypes.Email)?.Value;
         if (userId == null)
             return;
-        BackgroundJob.Enqueue<IEmailService>(e => e.ClassifyAllEmails(userId));
+        //BackgroundJob.Enqueue<IEmailService>(e => e.ClassifyAllEmails(userId));
+        //await _emailService.ClassifyAllEmailsByBatch(userId);
+        BackgroundJob.Enqueue<IEmailService>(e => e.ClassifyAllEmailsByBatch(userId));
+
     }
 
 }

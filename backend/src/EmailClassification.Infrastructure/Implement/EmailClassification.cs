@@ -3,8 +3,9 @@ using EmailClassification.Application.Interfaces.IServices;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Newtonsoft.Json;
-using Newtonsoft.Json.Linq;
+using System.Net.Http.Headers;
 using System.Text;
+using System.Text.Json;
 
 namespace EmailClassification.Infrastructure.Implement
 {
@@ -13,12 +14,13 @@ namespace EmailClassification.Infrastructure.Implement
         private readonly ILogger<ClassificationService> _logger;
         private readonly HttpClient _httpClient;
         private readonly IConfiguration _configuration;
-
+        private readonly string path;
         public ClassificationService(ILogger<ClassificationService> logger, HttpClient httpClient, IConfiguration configuration)
         {
             _logger = logger;
-            _httpClient = httpClient;
             _configuration = configuration;
+            _httpClient = httpClient;
+            path = _configuration["ClassificationApi:Endpoint"];
         }
 
         public async Task<string?> IdentifyLabel(string emailContent)
@@ -35,42 +37,57 @@ namespace EmailClassification.Infrastructure.Implement
 
                 //content.Add(byteContent, "file", "email.eml");
 
-                var endpoint = _configuration["ClassificationApi:Endpoint"];
+                //var endpoint = _configuration["ClassificationApi:Endpoint"];
+                string endpoint = path + "/classify";
                 var payload = new { text = emailContent };
                 var json = JsonConvert.SerializeObject(payload);
                 var content = new StringContent(json, Encoding.UTF8, "application/json");
-
-                var response = await _httpClient.PostAsync(endpoint, content);
+                using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+                var response = await _httpClient.PostAsync(endpoint, content, cts.Token);
 
                 if (!response.IsSuccessStatusCode)
                 {
                     var errorContent = await response.Content.ReadAsStringAsync();
                     _logger.LogError("Classification failed. Status code: {StatusCode}, Body: {Body}", response.StatusCode, errorContent);
-                    throw new Exception($"Classification failed. Status code: {response.StatusCode}");
+                    return null;
                 }
 
                 var jsonString = await response.Content.ReadAsStringAsync();
-                //var jsonString = @"
-                //                {
-                //                    ""text"": ""Hi, how are you today?"",
-                //                    ""classification"": [
-                //                        {
-                //                            ""label"": ""Safe Email"",
-                //                            ""score"": 0.9925717711448669
-                //                        }
-                //                    ]
-                //                }";
-
-
                 return jsonString;
             }
             catch (Exception ex)
             {
                 _logger.LogError("Have problem when classify: " + ex);
                 return null;
-                throw;
             }
         }
 
+        public async Task<List<ClassificationResult>?> IdentifyLabelBatch(List<string> emailContents)
+        {
+            try
+            {
+                string endpoint = path + "/classify-batch";
+                var content = new StringContent(JsonConvert.SerializeObject(emailContents), Encoding.UTF8, "application/json");
+                var response = await _httpClient.PostAsync(endpoint, content);
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    _logger.LogError("Classification failed. Status code: {StatusCode}, Body: {Body}", response.StatusCode, errorContent);
+                    return null;
+                }
+
+                var responseBody = await response.Content.ReadAsStringAsync();
+                var result = JsonConvert.DeserializeObject<ClassificationResponse>(responseBody);
+
+                return result?.Results;
+            }
+            catch (Exception ex)
+            {
+                _logger.LogError("Have problem when classify: " + ex);
+                return null;
+            }
+
+        }
     }
 }

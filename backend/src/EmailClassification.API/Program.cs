@@ -1,5 +1,8 @@
 ﻿
+using EmailClassification.API.Hubs;
+using EmailClassification.API.Services;
 using EmailClassification.Application;
+using EmailClassification.Application.Interfaces.INotification;
 using EmailClassification.Application.Interfaces.IServices;
 using EmailClassification.Infrastructure;
 using EmailClassification.Infrastructure.Middlewares;
@@ -57,7 +60,8 @@ namespace EmailClassification.API
                         }
                 });
             });
-
+            builder.Services.AddSignalR();
+            builder.Services.AddScoped<INotificationSender, SignalRNotificationSender>();
 
 
             var app = builder.Build();
@@ -79,6 +83,7 @@ namespace EmailClassification.API
             app.UseMiddleware<GuestIdMiddleware>();
             app.UseAuthentication();
             app.UseAuthorization();
+            app.MapHub<EmailHub>("/emailhub");
             app.UseHangfireDashboard();
 
 
