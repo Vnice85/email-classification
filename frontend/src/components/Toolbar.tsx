@@ -1,0 +1,2 @@
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
+import { faCheckDouble, faClock, faInbox, faTrash, faExclamationTriangle, faTags, faRobot, faFilter, faPen, faRotateRight, faEye } from '@fortawesome/free-solid-svg-icons';
